@@ -42,6 +42,8 @@ Download the latest [release](https://github.com/clawntl/qmk-sk620/releases). It
 
 ![The SK620 flasher window after a first flash](docs/images/flasher.png)
 
+After the first flash, [OpenPeriph](https://github.com/clawntl/openperiph) can also update the firmware: it checks these releases when the SK620 is plugged in and installs a newer one in one click, keeping your keymap, macros and lighting.
+
 For the **first flash** over Cooler Master's firmware, open the case, bridge the **SEL2** pads with tweezers and plug in before starting the flasher. It will ask you to type `ERASE`. After that, updates need nothing but the flasher: it puts the keyboard into bootloader mode by itself.
 
 > [!WARNING]

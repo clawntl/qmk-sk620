@@ -23,7 +23,7 @@ Flashing a new firmware build resets the keymap and macros to the build's defaul
 2. **Linux:** if the SK620 shows **Needs access**, click **Allow access** (it adds a udev rule and asks for your password), then unplug and replug the keyboard. If you already let `sk620_flash` install its rule, this isn't needed.
 3. Pick **Cooler Master SK620** in the list. The **Keymap**, **Lighting**, **Macros** and **Settings** pages change the keyboard as you click.
 
-**Settings, Restart into bootloader** puts the keyboard into flashing mode, like `sk620_flash` does.
+**Settings, Firmware** shows the installed version (firmware 1.0.1 and later report it), checks GitHub for a newer release, and updates in one click, keeping your keymap, macros and lighting. Only the very first flash over Cooler Master's firmware needs `sk620_flash`.
 
 ## usevia.app
 
