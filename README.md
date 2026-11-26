@@ -11,7 +11,8 @@ The pins were never probed by hand. They were read out of Cooler Master's own SK
 | All 65 keys (UK ISO) | Working, confirmed on hardware |
 | Fn layer from the keycap legends | Working |
 | Per-key RGB (MBIA043 driver) | Lights and animates, confirmed on hardware |
-| RGB effects that react to key presses | Not linked yet: LED-to-key mapping firmware ready ([docs/led-mapping.md](docs/led-mapping.md)) |
+| LED-to-key mapping (67 LEDs: one per key, three under the space bar) | Mapped on hardware ([docs/led-mapping.md](docs/led-mapping.md)) |
+| RGB effects that react to key presses (splash, reactive, typing heatmap) | Built with the mapping; not yet tried on hardware |
 | Settings saved across unplugs (SPI flash) | Working, confirmed on hardware |
 | Change keys and lighting from the PC (VIA) | Built (`cm_sk620_via.bin`); not yet tried on hardware |
 | ANSI (US) SK620 | Matrix is the same; needs an ANSI layout and keymap |
@@ -93,6 +94,7 @@ docs/stock-firmware.md     Cooler Master updater format, extracting and restorin
 docs/reverse-engineering.md how the pin map was read out of the stock firmware
 tools/flash/               sk620_flash.py: dependency-free flasher (window + command line) for Windows and Linux, plus its tests
 tools/via/                 generates the VIA definition from keyboard.json
+tools/ledmap/              the LED map result and the script that applies it to keyboard.json and sk620.c
 tools/cm_fw_extract.py     extract firmware images from a Cooler Master SK620 updater .exe
 tools/analysis/            Unicorn-based emulator and the scripts that produced the pin map
 tools/porting/             pin-finder firmware and log-to-QMK script for boards without stock firmware

@@ -60,9 +60,9 @@ Each LED refresh interrupt does three things:
 
 That matches hansemro's `mbi` driver ordering. `g_mbi_channels` is therefore an identity map: chip *n* = colour *n*, output *c* = column *c*.
 
-The firmware's LED position table (at 0xC946) maps LED row x MBIA channel to an LED index. 108 of the 128 positions are wired. An LED index *i* sits on a 17 x 7 grid at x = *i* / 7, y = *i* % 7. That grid is larger than the 65 keys, so it probably includes the edge lighting. `sk620.c` uses this table unchanged, and `keyboard.json` places LED *i* at (14·x, 10.7·y).
+The stock firmware's LED position table (at 0xC946) maps LED row x MBIA channel to a stock LED number. 108 of the 128 positions appear in it. Stock LED *n* sits on a 17 x 7 grid at column *n* / 7, row *n* % 7, a grid shared with larger Cooler Master boards.
 
-Which LED belongs to which key hasn't been worked out yet, so effects that react to key presses don't follow the keys.
+The [LED mapper](led-mapping.md) showed that only **67 LEDs are fitted**: one under each of the 65 keys, plus two extra under the space bar (three in total). They are almost all on MBIA channels 0–8. The other 41 table positions drive nothing. The fitted LEDs match the stock grid exactly: grid rows 1–5 are the key rows and grid columns follow the key columns, with the two extra space bar LEDs parked at unused grid spots (0 and 6). The raw result is in [`tools/ledmap/sk620_iso_ledmap.txt`](../tools/ledmap/sk620_iso_ledmap.txt). `tools/ledmap/apply_ledmap.py` turned it into the `rgb_matrix` layout in `keyboard.json` (LEDs in row order, each linked to its key) and the `g_mbi_led_matrix_co` table in `sk620.c`, where empty positions are `NLD`.
 
 ## Bootloader and protection
 

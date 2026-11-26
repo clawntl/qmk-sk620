@@ -1,6 +1,6 @@
 # Mapping which LED is under which key
 
-The LED driver table copied from the stock firmware has 108 LED positions wired up, but the SK620 has only 65 keys. QMK needs to know which LED sits under which key before effects can react to key presses or each key can have its own colour. `cm_sk620_ledmap.bin` is a throwaway firmware that finds this out with your help. It takes about 5 minutes.
+Before mapping, the LED driver table copied from the stock firmware has 108 LED positions, but the SK620 has only 65 keys. QMK needs to know which LED sits under which key before effects can react to key presses or each key can have its own colour. `cm_sk620_ledmap.bin` is a throwaway firmware that finds this out with your help. It takes about 5 minutes.
 
 ## Before you start
 
@@ -36,7 +36,16 @@ missing         <- keys never recorded (should be empty)
 end
 ```
 
-This goes into `keyboard.json` (each LED gets its key's matrix position and physical x/y) and into the LED table in `sk620.c`, where positions with nothing fitted are dropped.
+Apply it with
+
+```sh
+git checkout 0aa215c -- qmk/keyboards/cm/sk620/sk620.c   # stock LED table; only needed to map again
+python3 tools/ledmap/apply_ledmap.py result.txt
+```
+
+It rewrites `rgb_matrix.layout` in `keyboard.json` (each LED gets its key's matrix position and physical x/y) and the LED table in `sk620.c`, where positions with nothing fitted become `NLD`. The script expects the table to still use stock LED numbers, which is what the mapper steps through.
+
+The SK620 ISO result is in [`tools/ledmap/sk620_iso_ledmap.txt`](../tools/ledmap/sk620_iso_ledmap.txt) and has been applied. The board has 67 LEDs: one per key and three under the space bar.
 
 ## How it works
 
