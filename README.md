@@ -12,7 +12,8 @@ The pins were never probed by hand. They were read out of Cooler Master's own SK
 | Fn layer from the keycap legends | Working |
 | Per-key RGB (MBIA043 driver) | Lights and animates, confirmed on hardware |
 | RGB effects that react to key presses | Not linked yet (LED-to-key mapping still to be done) |
-| Settings saved across unplugs (SPI flash) | Configured, not yet confirmed |
+| Settings saved across unplugs (SPI flash) | Working, confirmed on hardware |
+| Change keys and lighting from the PC (VIA) | Built (`cm_sk620_via.bin`); not yet tried on hardware |
 | ANSI (US) SK620 | Matrix is the same; needs an ANSI layout and keymap |
 | SK622 (Bluetooth model) | Not supported |
 | One-step flasher with GUI, no dependencies | Working on Linux (CachyOS), including automatic bootloader entry; Windows build not yet tried on hardware |
@@ -44,7 +45,22 @@ For the **first flash** over Cooler Master's firmware, open the case, bridge the
 > [!WARNING]
 > The first flash permanently erases Cooler Master's firmware and its updater. The chip is read-protected, so it can't be backed up first. [docs/stock-firmware.md](docs/stock-firmware.md) describes how to rebuild a bootable stock image from Cooler Master's official updater. That restore image is untested.
 
-To build from source or flash with `ht32-dfu-tool` instead, see [docs/flashing.md](docs/flashing.md).
+## Changing settings from the PC
+
+Flash `cm_sk620_via.bin` instead of the default firmware, then open [usevia.app](https://usevia.app) in Chrome or Edge (Windows or Linux, nothing to install) to remap keys on 4 layers, record macros, and set the lighting effect, brightness, speed and colour. See [docs/configuring.md](docs/configuring.md).
+
+## Building
+
+Everything needed is in this repository: official QMK as a pinned submodule, the HT32 and MBIA043 support as patches in [`patches/qmk`](patches/qmk/README.md), and a build script. Only the ARM compiler comes from your distribution:
+
+```sh
+sudo pacman -Syu && sudo pacman -S --needed git make python arm-none-eabi-gcc arm-none-eabi-newlib
+git clone --recurse-submodules https://github.com/clawntl/qmk-sk620
+cd qmk-sk620
+./build.sh        # out/cm_sk620_default.bin   (./build.sh via -> out/cm_sk620_via.bin)
+```
+
+`build.sh` writes only inside the repository and uses its own Python venv. Details, and flashing with `ht32-dfu-tool` instead, are in [docs/flashing.md](docs/flashing.md).
 
 ## Default keymap
 
@@ -64,12 +80,18 @@ Layer 0 is the stock UK layout, taken directly from Cooler Master's firmware. Th
 ## Repository layout
 
 ```
-qmk/keyboards/cm/sk620/   QMK keyboard definition (copy into the QMK fork)
+build.sh                   builds the firmware into out/ from the files below
+qmk_firmware/              official QMK, git submodule pinned to a tested commit (not modified)
+patches/qmk/               HT32 MCU and MBIA043 LED driver support, applied by build.sh
+qmk/keyboards/cm/sk620/    the SK620 keyboard definition and keymaps (default, via)
+via/sk620_iso.json         VIA definition, to load in usevia.app
 docs/hardware.md           pin map, matrix, LED driver wiring, protection bits
-docs/flashing.md           setup and flashing on Linux, recovery
+docs/flashing.md           flashing, building, recovery
+docs/configuring.md        changing keys and lighting from the PC with VIA
 docs/stock-firmware.md     Cooler Master updater format, extracting and restoring stock firmware
 docs/reverse-engineering.md how the pin map was read out of the stock firmware
 tools/flash/               sk620_flash.py: dependency-free flasher (window + command line) for Windows and Linux, plus its tests
+tools/via/                 generates the VIA definition from keyboard.json
 tools/cm_fw_extract.py     extract firmware images from a Cooler Master SK620 updater .exe
 tools/analysis/            Unicorn-based emulator and the scripts that produced the pin map
 tools/porting/             pin-finder firmware and log-to-QMK script for boards without stock firmware
@@ -77,7 +99,7 @@ tools/porting/             pin-finder firmware and log-to-QMK script for boards 
 
 ## Credits
 
-- **hansemro** for HT32 support in QMK and ChibiOS, the MBIA043 driver, the MasterKeys ports this builds on, and `ht32-dfu-tool`.
+- **Hansem Ro (hansemro)** for HT32 support in QMK and ChibiOS and the MBIA043 driver (the two patches in `patches/qmk`), the MasterKeys ports this builds on, and `ht32-dfu-tool`.
 - **ChaoticEnigma** and the pok3rtool project for documenting the Vortex/Cooler Master updater encoding and the CYKB firmware XOR key.
 - **mateuszradomski/re-masterkeys** for the MasterKeys Pro S White reverse-engineering notes and schematic.
 

@@ -35,42 +35,50 @@ The flasher follows the same Holtek ISP protocol as hansemro's `ht32-dfu-tool`: 
 
 ## Building the firmware yourself
 
-The rest of this page is only needed to build the firmware from source, or to flash with hansemro's `ht32-dfu-tool` instead.
+Everything needed to build is in this repository: official QMK is a submodule pinned to a tested commit, the HT32 and MBIA043 support is applied from [`patches/qmk`](../patches/qmk/README.md), and `build.sh` does the rest. No QMK fork, no `qmk setup`, no global QMK CLI.
 
-### 1. Install the tools without touching system Python
+### 1. Install the compiler (official packages only)
 
 These rules keep the install from interfering with your system:
 
 - Only install official-repo packages, with a full upgrade first. Never run a partial `pacman -Sy <pkg>`.
 - Install no `sudo pip` packages and nothing from the AUR.
-- Keep the QMK CLI in its own virtual environment.
 
 ```sh
 sudo pacman -Syu
-sudo pacman -S --needed git make python base-devel libusb \
-    arm-none-eabi-gcc arm-none-eabi-binutils arm-none-eabi-newlib
-
-python -m venv ~/.venvs/qmk
-~/.venvs/qmk/bin/pip install qmk
+sudo pacman -S --needed git make python arm-none-eabi-gcc arm-none-eabi-newlib
 ```
 
-Activate the environment in every new terminal before building. In fish, use `source ~/.venvs/qmk/bin/activate.fish`; in bash or zsh, use `source ~/.venvs/qmk/bin/activate`.
+(Debian/Ubuntu: `sudo apt install git make python3-venv gcc-arm-none-eabi libnewlib-arm-none-eabi`.)
 
-Next, get the QMK fork and add this keyboard. Don't run `qmk setup`: it would clone upstream QMK, which lacks the HT32 and MBIA043 support.
+### 2. Build
 
 ```sh
-git clone -b cmmkprosrgb_mbi_preview https://github.com/hansemro/qmk_firmware ~/qmk_sk620
-cd ~/qmk_sk620
-git submodule update --init --recursive
-qmk config user.qmk_home=$HOME/qmk_sk620
-cp -r /path/to/this/repo/qmk/keyboards/cm/sk620 keyboards/cm/
-make cm/sk620:default
+git clone --recurse-submodules https://github.com/clawntl/qmk-sk620
+cd qmk-sk620
+./build.sh            # out/cm_sk620_default.bin
+./build.sh via        # out/cm_sk620_via.bin, for configuring from the PC (see configuring.md)
 ```
 
-Install the flasher. It goes into `~/.cargo/bin`, so no system files change:
+`build.sh` works the same in fish, bash or zsh, since it runs under bash itself. It writes only inside the repository:
+
+| Path | What |
+| --- | --- |
+| `qmk_firmware/` | the official QMK submodule, never modified |
+| `.build/qmk_firmware/` | a copy with the patches applied and the keyboard copied in; also fetches QMK's ChibiOS, ChibiOS-Contrib and printf submodules at the commits QMK pins |
+| `.build/venv/` | Python packages QMK's build scripts need |
+| `out/` | the finished `.bin` files |
+
+The first run takes a minute or two; later runs only recompile. `./build.sh clean` deletes `.build/`. The output is reproducible: `./build.sh` gives the same `cm_sk620_default.bin` (SHA-256 `6f9b61d3…`) as building in Hansem Ro's QMK branch.
+
+Then flash `out/cm_sk620_*.bin` with `python3 tools/flash/sk620_flash.py`, browsing to the file, or with `ht32-dfu-tool` as below.
+
+### 3. Optional: ht32-dfu-tool
+
+`sk620_flash` does everything this tool does. Use this only if you prefer hansemro's tool; it installs into `~/.cargo/bin`, so no system files change:
 
 ```sh
-command -v cargo || sudo pacman -S --needed rust   # skip if you use rustup
+sudo pacman -S --needed libusb rust   # leave out rust if you use rustup
 cargo install --git https://github.com/hansemro/ht32-dfu-tool
 ```
 
@@ -85,25 +93,25 @@ sudo udevadm control --reload && sudo udevadm trigger
 > [!NOTE]
 > Version v103 of the SK620's ROM bootloader isn't decoded by `ht32-dfu-tool` yet, so it prints `Model: unknown`. To see the model, build the tool from source after running `sed -i 's/0x101 => {/0x101 | 0x102 | 0x103 => {/' src/device.rs`. Flashing works either way.
 
-### 2. First flash with ht32-dfu-tool (erases the stock firmware)
+### 4. First flash with ht32-dfu-tool (erases the stock firmware)
 
 1. Open the case. Unplug the keyboard and put the PCB on a non-conductive surface.
 2. Bridge the two **SEL2** pads with tweezers and keep them bridged until step 5 finishes.
 3. Plug in. `ht32-dfu-tool list` should show `[04d9:8010] Model=HT32F52352`.
 4. Run `ht32-dfu-tool info`. On a stock board it reports `Flash security: true`. Nothing can be backed up; see [stock-firmware.md](stock-firmware.md) for the way back.
-5. Run `ht32-dfu-tool -w write -m -v 0 cm_sk620_default.bin`. It mass-erases the chip, resets into the ROM bootloader (because SEL2 is still bridged), writes and verifies.
+5. Run `ht32-dfu-tool -w write -m -v 0 out/cm_sk620_default.bin`. It mass-erases the chip, resets into the ROM bootloader (because SEL2 is still bridged), writes and verifies.
 6. Remove the tweezers, unplug, and plug back in. `lsusb` should show `feed:0620 Cooler Master SK620`.
 
-### 3. Later flashes with ht32-dfu-tool
+### 5. Later flashes with ht32-dfu-tool
 
 Press **Fn+B**, or hold **Esc** while plugging in, then run:
 
 ```sh
-make cm/sk620:default
-ht32-dfu-tool -w -r write -v 0 cm_sk620_default.bin
+./build.sh
+ht32-dfu-tool -w -r write -v 0 out/cm_sk620_default.bin
 ```
 
-Leave out `-m`: the chip is already unlocked. `-r` restarts the keyboard into the new firmware. `make cm/sk620:default:flash` also works; it waits for the bootloader and then writes.
+Leave out `-m`: the chip is already unlocked. `-r` restarts the keyboard into the new firmware.
 
 ## Recovery
 

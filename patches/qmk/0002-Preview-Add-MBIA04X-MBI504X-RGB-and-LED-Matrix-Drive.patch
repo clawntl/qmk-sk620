@@ -1,0 +1,770 @@
+From 14d5521b884e693d0c62c64fc930fbc7cbe8a7fa Mon Sep 17 00:00:00 2001
+From: Hansem Ro <hansemro@outlook.com>
+Date: Fri, 19 Jan 2024 06:06:28 -0800
+Subject: [PATCH 2/2] [Preview] Add MBIA04X/MBI504X RGB and LED Matrix Driver
+
+Aims to target MBIA043/MBIA045/MBI5042/MBI5043 LED drivers with
+proprietary SPI-like control interface.
+
+This driver attempts to support as many different configurations
+possible including:
+- custom MBI output channel <-> color channel mapping
+- custom LED Matrix to LED Index table
+    - we should not assume Key and LED Matrices match
+
+This driver requires PWM and GPT drivers. PWM driver operates the GCLK
+clock signal. GPT driver periodically flushes a row or column color data
+to MBI buffers.
+
+TODO: add docs
+---
+ builddefs/common_features.mk            |  16 +-
+ data/schemas/keyboard.jsonschema        |   2 +
+ docs/reference_info_json.md             |   4 +-
+ drivers/led/mbi.c                       | 258 ++++++++++++++++++++
+ drivers/led/mbi.h                       | 312 ++++++++++++++++++++++++
+ quantum/led_matrix/led_matrix_drivers.c |   8 +
+ quantum/led_matrix/led_matrix_drivers.h |   2 +
+ quantum/rgb_matrix/rgb_matrix_drivers.c |   8 +
+ quantum/rgb_matrix/rgb_matrix_drivers.h |   2 +
+ 9 files changed, 608 insertions(+), 4 deletions(-)
+ create mode 100644 drivers/led/mbi.c
+ create mode 100644 drivers/led/mbi.h
+
+diff --git a/builddefs/common_features.mk b/builddefs/common_features.mk
+index c122afcf..92ee334b 100644
+--- a/builddefs/common_features.mk
++++ b/builddefs/common_features.mk
+@@ -338,7 +338,7 @@ LED_MATRIX_DRIVER := snled27351
+ endif
+ 
+ LED_MATRIX_ENABLE ?= no
+-VALID_LED_MATRIX_TYPES := is31fl3218 is31fl3236 is31fl3729 is31fl3731 is31fl3733 is31fl3736 is31fl3737 is31fl3741 is31fl3742a is31fl3743a is31fl3745 is31fl3746a snled27351 custom
++VALID_LED_MATRIX_TYPES := is31fl3218 is31fl3236 is31fl3729 is31fl3731 is31fl3733 is31fl3736 is31fl3737 is31fl3741 is31fl3742a is31fl3743a is31fl3745 is31fl3746a mbi snled27351 custom
+ 
+ ifeq ($(strip $(LED_MATRIX_ENABLE)), yes)
+     ifeq ($(filter $(LED_MATRIX_DRIVER),$(VALID_LED_MATRIX_TYPES)),)
+@@ -429,6 +429,12 @@ ifeq ($(strip $(LED_MATRIX_ENABLE)), yes)
+         SRC += is31fl3746a-mono.c
+     endif
+ 
++    ifeq ($(strip $(LED_MATRIX_DRIVER)), mbi)
++		OPT_DEFS += -DMBI_LED_TYPE=MBI_LED_TYPE_MONO
++        COMMON_VPATH += $(DRIVER_PATH)/led
++        SRC += mbi.c
++    endif
++
+     ifeq ($(strip $(LED_MATRIX_DRIVER)), snled27351)
+         I2C_DRIVER_REQUIRED = yes
+         COMMON_VPATH += $(DRIVER_PATH)/led
+@@ -454,7 +460,7 @@ endif
+ 
+ RGB_MATRIX_ENABLE ?= no
+ 
+-VALID_RGB_MATRIX_TYPES := aw20216s is31fl3218 is31fl3236 is31fl3729 is31fl3731 is31fl3733 is31fl3736 is31fl3737 is31fl3741 is31fl3742a is31fl3743a is31fl3745 is31fl3746a snled27351 ws2812 custom
++VALID_RGB_MATRIX_TYPES := aw20216s is31fl3218 is31fl3236 is31fl3729 is31fl3731 is31fl3733 is31fl3736 is31fl3737 is31fl3741 is31fl3742a is31fl3743a is31fl3745 is31fl3746a mbi snled27351 ws2812 custom
+ ifeq ($(strip $(RGB_MATRIX_ENABLE)), yes)
+     ifeq ($(filter $(RGB_MATRIX_DRIVER),$(VALID_RGB_MATRIX_TYPES)),)
+         $(call CATASTROPHIC_ERROR,Invalid RGB_MATRIX_DRIVER,RGB_MATRIX_DRIVER="$(RGB_MATRIX_DRIVER)" is not a valid matrix type)
+@@ -555,6 +561,12 @@ ifeq ($(strip $(RGB_MATRIX_ENABLE)), yes)
+         SRC += is31fl3746a.c
+     endif
+ 
++    ifeq ($(strip $(RGB_MATRIX_DRIVER)), mbi)
++		OPT_DEFS += -DMBI_LED_TYPE=MBI_LED_TYPE_RGB
++        COMMON_VPATH += $(DRIVER_PATH)/led
++        SRC += mbi.c
++    endif
++
+     ifeq ($(strip $(RGB_MATRIX_DRIVER)), snled27351)
+         I2C_DRIVER_REQUIRED = yes
+         COMMON_VPATH += $(DRIVER_PATH)/led
+diff --git a/data/schemas/keyboard.jsonschema b/data/schemas/keyboard.jsonschema
+index 0f765115..9ca89ff9 100644
+--- a/data/schemas/keyboard.jsonschema
++++ b/data/schemas/keyboard.jsonschema
+@@ -545,6 +545,7 @@
+                         "is31fl3743a",
+                         "is31fl3745",
+                         "is31fl3746a",
++                        "mbi",
+                         "snled27351"
+                     ]
+                 },
+@@ -629,6 +630,7 @@
+                         "is31fl3743a",
+                         "is31fl3745",
+                         "is31fl3746a",
++                        "mbi",
+                         "snled27351",
+                         "ws2812"
+                     ]
+diff --git a/docs/reference_info_json.md b/docs/reference_info_json.md
+index c3085995..224c8503 100644
+--- a/docs/reference_info_json.md
++++ b/docs/reference_info_json.md
+@@ -403,7 +403,7 @@ Configures the [LED Matrix](features/led_matrix) feature.
+             * The default animation speed.
+             * Default: `128`
+     * `driver` <Badge type="info">String</Badge> <Badge>Required</Badge>
+-        * The driver to use. Must be one of `custom`, `is31fl3218`, `is31fl3731`, `is31fl3733`, `is31fl3736`, `is31fl3737`, `is31fl3741`, `is31fl3742a`, `is31fl3743a`, `is31fl3745`, `is31fl3746a`, `snled27351`.
++        * The driver to use. Must be one of `custom`, `is31fl3218`, `is31fl3731`, `is31fl3733`, `is31fl3736`, `is31fl3737`, `is31fl3741`, `is31fl3742a`, `is31fl3743a`, `is31fl3745`, `is31fl3746a`, `mbi`, `snled27351`.
+     * `layout` <Badge type="info">Array: Object</Badge> <Badge>Required</Badge>
+         * List of LED configuration dictionaries. Each dictionary contains:
+             * `flags` <Badge type="info">Number</Badge> <Badge>Required</Badge>
+@@ -654,7 +654,7 @@ Configures the [RGB Matrix](features/rgb_matrix) feature.
+             * The default animation speed.
+             * Default: `128`
+     * `driver` <Badge type="info">String</Badge> <Badge>Required</Badge>
+-        * The driver to use. Must be one of `aw20216s`, `custom`, `is31fl3218`, `is31fl3236`, `is31fl3729`, `is31fl3731`, `is31fl3733`, `is31fl3736`, `is31fl3737`, `is31fl3741`, `is31fl3742a`, `is31fl3743a`, `is31fl3745`, `is31fl3746a`, `snled27351`, `ws2812`.
++        * The driver to use. Must be one of `aw20216s`, `custom`, `is31fl3218`, `is31fl3236`, `is31fl3729`, `is31fl3731`, `is31fl3733`, `is31fl3736`, `is31fl3737`, `is31fl3741`, `is31fl3742a`, `is31fl3743a`, `is31fl3745`, `is31fl3746a`, `mbi`, `snled27351`, `ws2812`.
+     * `hue_steps` <Badge type="info">Number</Badge>
+         * The value by which to increment the hue.
+         * Default: `8`
+diff --git a/drivers/led/mbi.c b/drivers/led/mbi.c
+new file mode 100644
+index 00000000..3adb2459
+--- /dev/null
++++ b/drivers/led/mbi.c
+@@ -0,0 +1,258 @@
++// Copyright (c) 2024 Hansem Ro <hansemro@outlook.com>
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#include "string.h"
++#include "gpio.h"
++#include "mbi.h"
++
++#ifdef SPLIT_KEYBOARD
++#    error "Split keyboard not supported"
++#endif
++
++pin_t g_mbi_led_pins[MBI_NUM_LED_GPIO_PINS] = MBI_LED_GPIO_PINS;
++
++static uint8_t led_gpio_idx = 0;
++
++// TODO: validate PWM output frequency if user-defined
++
++/* GCLK frequency = MBI_PWM_COUNTER_FREQUENCY / MBI_PWM_PERIOD */
++static PWMConfig gclk_pwm_config = {
++    .frequency = MBI_PWM_COUNTER_FREQUENCY,
++    .period    = MBI_PWM_PERIOD,
++};
++
++typedef struct {
++#if (MBI_LED_TYPE == MBI_LED_TYPE_RGB)
++    uint16_t r;
++    uint16_t g;
++    uint16_t b;
++#elif (MBI_LED_TYPE == MBI_LED_TYPE_MONO)
++    uint16_t v;
++#endif
++} mbi_led_t;
++
++// mbi_leds[0]: back buffer
++// mbi_leds[1]: front buffer (sent to MBI)
++static mbi_led_t mbi_leds[2][MBI_LED_COUNT];
++
++inline void mbi_flush_isr(void) {
++    /* disable previous scan ROW/COL pin */
++#if (MBI_LED_GPIO_ACTIVE_STATE == ACTIVE_LOW)
++    writePinHigh(g_mbi_led_pins[led_gpio_idx]);
++#elif (MBI_LED_GPIO_ACTIVE_STATE == ACTIVE_HIGH)
++    writePinLow(g_mbi_led_pins[led_gpio_idx]);
++#endif
++
++    led_gpio_idx += 1;
++    led_gpio_idx = (led_gpio_idx >= MBI_NUM_LED_GPIO_PINS) ? 0 : led_gpio_idx;
++
++    /* flush data for next scan line ROW/COL */
++    writePinLow(MBI_LE_PIN);
++    for (int i = MBI_NUM_CHANNELS - 1; i >= 0; i--) {
++        uint8_t color_ch;
++        uint8_t mbi_ch_idx;
++        uint8_t led_idx;
++        uint16_t color_val;
++        for (int j = MBI_NUM_DRIVER - 1; j >= 0; j--) {
++            color_ch = g_mbi_channels[j][i].color_channel;
++            mbi_ch_idx = g_mbi_channels[j][i].color_index;
++#if (MBI_LED_DIRECTION == ROW2COL)
++            led_idx = g_mbi_led_matrix_co[led_gpio_idx][mbi_ch_idx];
++#elif (MBI_LED_DIRECTION == COL2ROW)
++            led_idx = g_mbi_led_matrix_co[mbi_ch_idx][led_gpio_idx];
++#endif
++            switch (color_ch) {
++#if (MBI_LED_TYPE == MBI_LED_TYPE_RGB)
++                case MBI_RED_CH:
++                    color_val = mbi_leds[1][led_idx].r;
++                    break;
++                case MBI_GREEN_CH:
++                    color_val = mbi_leds[1][led_idx].g;
++                    break;
++                case MBI_BLUE_CH:
++                    color_val = mbi_leds[1][led_idx].b;
++                    break;
++#elif (MBI_LED_TYPE == MBI_LED_TYPE_MONO)
++                case MBI_MONO_CH:
++                    color_val = mbi_leds[1][led_idx].v;
++                    break;
++#endif
++                case MBI_UNUSED_CH:
++                default:
++                    color_val = 0;
++            }
++            if (j == 0)
++                mbi_shift_data_instr(color_val, MBI_SHIFT_REG_WIDTH, MBI_DATA_LATCH);
++            else
++                mbi_shift_data(color_val, MBI_SHIFT_REG_WIDTH);
++        }
++    }
++    mbi_send_instruction(MBI_GLOBAL_LATCH);
++    writePinLow(MBI_SDI_PIN);
++    writePinLow(MBI_DCLK_PIN);
++
++    /* activate scan ROW/COL pin */
++#if (MBI_LED_GPIO_ACTIVE_STATE == ACTIVE_LOW)
++    writePinLow(g_mbi_led_pins[led_gpio_idx]);
++#elif (MBI_LED_GPIO_ACTIVE_STATE == ACTIVE_HIGH)
++    writePinHigh(g_mbi_led_pins[led_gpio_idx]);
++#endif
++}
++
++static void mbi_gpt_flush_isr(GPTDriver *gptp) {
++    mbi_flush_isr();
++}
++
++/* ROW/COL update frequency = MBI_TIMER_COUNTER_FREQUENCY / MBI_TIMER_PERIOD */
++static GPTConfig mbi_timer_config = {
++    .frequency = MBI_TIMER_COUNTER_FREQUENCY,
++    .callback  = mbi_gpt_flush_isr,
++};
++
++/* Send 'instr' number of DCLK pulses while LE is asserted high. */
++void inline mbi_send_instruction(uint8_t instr) {
++    writePinLow(MBI_LE_PIN);
++    mbi_io_wait;
++    writePinHigh(MBI_LE_PIN);
++    while (instr-- > 0) {
++        mbi_io_wait;
++        writePinLow(MBI_DCLK_PIN);
++        mbi_io_wait;
++        writePinHigh(MBI_DCLK_PIN);
++    }
++    writePinLow(MBI_LE_PIN);
++}
++
++/* Transmit `shift_amount` bits of `data` to shift-register. */
++void inline mbi_shift_data(uint16_t data, uint8_t shift_amount) {
++    while (shift_amount-- > 0) {
++        mbi_io_wait;
++        writePinLow(MBI_DCLK_PIN);
++        writePin(MBI_SDI_PIN, data & MBI_SHIFT_REG_MSB_MASK);
++        mbi_io_wait;
++        writePinHigh(MBI_DCLK_PIN);
++        data = data << 1;
++    }
++}
++
++/* Transmit `shift_amount` bits of `data` to shift-register, and assert LE for
++ * the last `instr` number of DCLK pulses.
++ *
++ * Note: Assumes `instr` is less than `shift_amount`.
++ */
++void inline mbi_shift_data_instr(uint16_t data, uint8_t shift_amount, uint8_t instr) {
++    if (instr < shift_amount) {
++        writePinLow(MBI_LE_PIN);
++        mbi_shift_data(data, shift_amount - instr);
++        data = data << (shift_amount - instr);
++        writePinHigh(MBI_LE_PIN);
++        mbi_shift_data(data, instr);
++        writePinLow(MBI_LE_PIN);
++    }
++}
++
++#if defined(MBI_WRITE_CONFIGURATION) && defined(MBI_ENABLE_WRITE_CONFIGURATION)
++/* Write `val` to each MBI configuration register. */
++void mbi_write_configuration(uint16_t val) {
++    mbi_send_instruction(MBI_ENABLE_WRITE_CONFIGURATION);
++    int i = 0;
++    for (; i < MBI_NUM_DRIVER - 1; i++) {
++        mbi_shift_data(val, MBI_SHIFT_REG_WIDTH);
++    }
++    if (i < MBI_NUM_DRIVER) {
++        mbi_shift_data_instr(val, MBI_SHIFT_REG_WIDTH, MBI_WRITE_CONFIGURATION);
++    }
++}
++#endif
++
++/* Configure and initialize MBI and LED pins */
++__attribute__((weak)) void mbi_init_pins(void) {
++    palSetLineMode(MBI_DCLK_PIN, MBI_DCLK_OUTPUT_MODE);
++    palSetLineMode(MBI_GCLK_PIN, MBI_GCLK_OUTPUT_MODE);
++    palSetLineMode(MBI_LE_PIN, MBI_LE_OUTPUT_MODE);
++    palSetLineMode(MBI_SDI_PIN, MBI_SDI_OUTPUT_MODE);
++    writePinHigh(MBI_DCLK_PIN);
++    writePinHigh(MBI_GCLK_PIN);
++    writePinHigh(MBI_LE_PIN);
++    writePinHigh(MBI_SDI_PIN);
++
++    /* setup LED ROW/COL pins*/
++    for (int i = 0; i < MBI_NUM_LED_GPIO_PINS; i++) {
++        palSetLineMode(g_mbi_led_pins[i], MBI_LED_GPIO_OUTPUT_MODE);
++#if (MBI_LED_GPIO_ACTIVE_STATE == ACTIVE_LOW)
++        writePinHigh(g_mbi_led_pins[i]);
++#elif (MBI_LED_GPIO_ACTIVE_STATE == ACTIVE_HIGH)
++        writePinLow(g_mbi_led_pins[i]);
++#endif
++    }
++
++    /* Enable power to MBI(s) if managed by MCU */
++#ifdef MBI_POWER_ENABLE_PIN
++    palSetLineMode(MBI_POWER_ENABLE_PIN, MBI_POWER_OUTPUT_MODE);
++#    if (MBI_POWER_ACTIVE_STATE == ACTIVE_HIGH)
++    writePinHigh(MBI_POWER_ENABLE_PIN);
++#    elif (MBI_POWER_ACTIVE_STATE == ACTIVE_LOW)
++    writePinLow(MBI_POWER_ENABLE_PIN);
++#    endif
++#endif
++}
++
++__attribute__((weak)) void mbi_init_config(void) {
++#if defined(MBI_WRITE_CONFIGURATION) && defined(MBI_ENABLE_WRITE_CONFIGURATION) && defined(MBI_CONFIGURATION)
++    mbi_write_configuration(MBI_CONFIGURATION);
++#endif
++}
++
++__attribute__((weak)) void mbi_init_timers(void) {
++    /* Configure PWM (for GCLK pin) */
++    gclk_pwm_config.channels[MBI_PWM_CHANNEL].mode = MBI_PWM_OUTPUT_MODE;
++    pwmStart(&MBI_PWM_DRIVER, &gclk_pwm_config);
++
++    /* Start PWM and Timer */
++    pwmEnableChannel(&MBI_PWM_DRIVER, MBI_PWM_CHANNEL, PWM_FRACTION_TO_WIDTH(&MBI_PWM_DRIVER, 2, 1));
++    gptStart(&MBI_TIMER_DRIVER, &mbi_timer_config);
++    if (MBI_TIMER_DRIVER.state == GPT_READY)
++        gptStartContinuous(&MBI_TIMER_DRIVER, MBI_TIMER_PERIOD);
++}
++
++__attribute__((weak)) void mbi_init(void) {
++    /* Configure pins */
++    mbi_init_pins();
++
++    /* Configure MBI */
++    mbi_init_config();
++
++    /* Start/configure GCLK PWM and timer */
++    mbi_init_timers();
++}
++
++#if (MBI_LED_TYPE == MBI_LED_TYPE_RGB)
++void mbi_set_color(int index, uint8_t red, uint8_t green, uint8_t blue) {
++    // Lazy scaling
++    mbi_leds[0][index].r = red << (MBI_SHIFT_REG_WIDTH - 8);
++    mbi_leds[0][index].g = green << (MBI_SHIFT_REG_WIDTH - 8);
++    mbi_leds[0][index].b = blue << (MBI_SHIFT_REG_WIDTH - 8);
++}
++
++void mbi_set_color_all(uint8_t red, uint8_t green, uint8_t blue) {
++    for (int i = 0; i < MBI_LED_COUNT; i++) {
++        mbi_set_color(i, red, green, blue);
++    }
++}
++
++#elif (MBI_LED_TYPE == MBI_LED_TYPE_MONO)
++void mbi_set_value(int index, uint8_t value) {
++    // Lazy scaling
++    mbi_leds[0][index].v = value << (MBI_SHIFT_REG_WIDTH - 8);
++}
++
++void mbi_set_value_all(uint8_t value) {
++    for (int i = 0; i < MBI_LED_COUNT; i++) {
++        mbi_set_value(i, value);
++    }
++}
++#endif
++
++void mbi_flush(void) {
++    memcpy(&mbi_leds[1], &mbi_leds[0], MBI_LED_COUNT * sizeof(mbi_led_t));
++}
+diff --git a/drivers/led/mbi.h b/drivers/led/mbi.h
+new file mode 100644
+index 00000000..c8f860aa
+--- /dev/null
++++ b/drivers/led/mbi.h
+@@ -0,0 +1,312 @@
++// Copyright (c) 2024 Hansem Ro <hansemro@outlook.com>
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#pragma once
++
++/*
++ * LED or RGB Matrix driver for Macroblock MBI LED drivers with proprietary
++ * SPI-like control interface using PWM for GCLK and General Purpose Timer
++ * (GPT) for flushing color data.
++ *
++ * This driver can support the following MBI families:
++ * - MBIA04X
++ * - MBI504X
++ * - possibly others with the same control interface
++ *
++ * Although MBI parts may have two or more instructions, this driver will only
++ * require the Data Latch and Global Latch instructions. MBI instructions to
++ * write to configuration register is made optional for MBI parts without a
++ * (documented) configuration register (such as MBIA043).
++ *
++ * This driver does not pre-define instructions or configuration settings.
++ */
++
++#include <stdint.h>
++#include "gpio.h"
++
++/* number of output channels of a single MBI */
++#ifndef MBI_NUM_CHANNELS
++#    define 16
++#endif
++
++/* width of a single MBI's shift register in bits */
++#ifndef MBI_SHIFT_REG_WIDTH
++#    error "MBI_SHIFT_REG_WIDTH is not defined"
++#else
++#    if (MBI_SHIFT_REG_WIDTH >= 8) && (MBI_SHIFT_REG_WIDTH <= 16)
++/* used for sampling most significant bit */
++#        define MBI_SHIFT_REG_MSB_MASK (1U << (MBI_SHIFT_REG_WIDTH - 1))
++#    else
++#        error "MBI_SHIFT_REG_WIDTH must be between 8 and 16 (bits)"
++#    endif
++#endif
++
++/* number of MBI(s) */
++#ifndef MBI_NUM_DRIVER
++#    error "MBI_NUM_DRIVER is not defined"
++#endif
++
++/* RGB or Grayscale (mono) LEDs */
++#define MBI_LED_TYPE_MONO 0
++#define MBI_LED_TYPE_RGB 1
++
++/* Select between Mono or RGB type driver */
++#ifdef MBI_LED_TYPE
++#    if (MBI_LED_TYPE != MBI_LED_TYPE_RGB) && (MBI_LED_TYPE != MBI_LED_TYPE_MONO)
++#        error "MBI_LED_TYPE is not defined to either MBI_LED_TYPE_RGB or MBI_LED_TYPE_MONO"
++#    endif
++#else
++#    error "MBI_LED_TYPE is not defined to either MBI_LED_TYPE_RGB or MBI_LED_TYPE_MONO"
++#endif
++
++/* LED matrix directions:
++ * - COL2ROW: from MCU-managed column pins to MBI-managed row pins
++ * - ROW2COL: from MCU-managed row pins to MBI-managed column pins
++ */
++#ifndef COL2ROW
++#    define COL2ROW 0
++#endif
++#ifndef ROW2COL
++#    define ROW2COL 1
++#endif
++
++#ifndef MBI_LED_DIRECTION
++#    error "MBI_LED_DIRECTION is not defined to either ROW2COL or COL2ROW"
++#endif
++
++/* MCU-managed row/column LED pins */
++#ifndef MBI_LED_GPIO_PINS
++#    error "MBI_LED_GPIO_PINS is not defined with an array of pins"
++#endif
++
++#ifndef MBI_LED_GPIO_OUTPUT_MODE
++#    define MBI_LED_GPIO_OUTPUT_MODE PAL_MODE_OUTPUT_PUSHPULL
++#endif
++
++#ifndef MBI_NUM_LED_GPIO_PINS
++#    error "MBI_NUM_LED_GPIO_PINS is not defined"
++#else
++#    define MBI_LED_COUNT (MBI_NUM_CHANNELS * MBI_NUM_LED_GPIO_PINS)
++#endif
++
++#ifndef ACTIVE_HIGH
++#    define ACTIVE_HIGH 1
++#endif
++#ifndef LOW
++#    define ACTIVE_LOW 0
++#endif
++
++#ifdef MBI_LED_GPIO_ACTIVE_STATE
++#    if (MBI_LED_GPIO_ACTIVE_STATE != ACTIVE_HIGH) && (MBI_LED_GPIO_ACTIVE_STATE != ACTIVE_LOW)
++#        error "MBI_LED_GPIO_ACTIVE_STATE must be defined to either ACTIVE_HIGH or ACTIVE_LOW"
++#    endif
++#else
++#    error "MBI_LED_GPIO_ACTIVE_STATE is not defined"
++#endif
++
++/* PWM driver to use for generating GCLK clock signal */
++#ifndef MBI_PWM_DRIVER
++#    error "MBI_PWM_DRIVER is not defined"
++#endif
++
++#ifndef MBI_PWM_CHANNEL
++#    error "MBI_PWM_CHANNEL is not defined"
++#endif
++
++#ifndef MBI_PWM_OUTPUT_MODE
++#    define MBI_PWM_OUTPUT_MODE PWM_OUTPUT_ACTIVE_LOW
++#endif
++
++/* PWM period in counter ticks >= 2 */
++#ifndef MBI_PWM_PERIOD
++#    define MBI_PWM_PERIOD 2UL
++#endif
++
++/* PWM counter frequency in Hz = desired GCLK frequency * MBI_PWM_PERIOD */
++#ifndef MBI_PWM_COUNTER_FREQUENCY
++/* default: 4 MHz GCLK */
++#    define MBI_PWM_COUNTER_FREQUENCY (4000000UL * MBI_PWM_PERIOD)
++#endif
++
++/* GPT timer driver to use for continuous row/column pin cycling and data flushing */
++#ifndef MBI_TIMER_DRIVER
++#    error "MBI_TIMER_DRIVER is not defined"
++#endif
++
++/* Timer period in counter ticks >= 2 */
++#ifndef MBI_TIMER_PERIOD
++#    define MBI_TIMER_PERIOD 2UL
++#endif
++
++/* Timer counter frequency in Hz = desired LED refresh rate * MBI_NUM_LED_GPIO_PINS * MBI_TIMER_PERIOD */
++#ifndef MBI_TIMER_COUNTER_FREQUENCY
++/* default: 120 Hz LED refresh rate */
++#    define MBI_TIMER_COUNTER_FREQUENCY (120UL * MBI_NUM_LED_GPIO_PINS * MBI_TIMER_PERIOD)
++#endif
++
++/* MBI PINS */
++
++#ifndef MBI_LE_PIN
++#    error "MBI_LE_PIN is not defined"
++#endif
++
++#ifndef MBI_LE_OUTPUT_MODE
++#    define MBI_LE_OUTPUT_MODE PAL_MODE_OUTPUT_PUSHPULL
++#endif
++
++#ifndef MBI_SDI_PIN
++#    error "MBI_SDI_PIN is not defined"
++#endif
++
++#ifndef MBI_SDI_OUTPUT_MODE
++#    define MBI_SDI_OUTPUT_MODE PAL_MODE_OUTPUT_PUSHPULL
++#endif
++
++#ifndef MBI_DCLK_PIN
++#    error "MBI_DCLK_PIN is not defined"
++#endif
++
++#ifndef MBI_DCLK_OUTPUT_MODE
++#    define MBI_DCLK_OUTPUT_MODE PAL_MODE_OUTPUT_PUSHPULL
++#endif
++
++#ifndef MBI_GCLK_PIN
++#    error "MBI_GCLK_PIN is not defined"
++#endif
++
++#ifndef MBI_GCLK_OUTPUT_MODE
++#    define MBI_GCLK_OUTPUT_MODE PAL_MODE_OUTPUT_PUSHPULL
++#endif
++
++/* (Optional) MCU-managed pin to enable power to MBI */
++#ifdef MBI_POWER_ENABLE_PIN
++#    if !defined(MBI_POWER_ACTIVE_STATE) && (MBI_POWER_ACTIVE_STATE != ACTIVE_HIGH) && (MBI_POWER_ACTIVE_STATE != ACTIVE_LOW)
++#        error "MBI_POWER_ACTIVE_STATE must be defined to either ACTIVE_HIGH or ACTIVE_LOW"
++#    endif
++#    ifndef MBI_POWER_OUTPUT_MODE
++#        define MBI_POWER_OUTPUT_MODE PAL_MODE_OUTPUT_PUSHPULL
++#    endif
++#endif
++
++/* Insert nop delays to operate under 25MHz */
++#ifndef MBI_NOPS
++#    if defined(__AVR__)
++#        define MBI_NOPS 0 // AVR at 16 MHz already spends 62.5 ns per clock, so no extra delay is needed
++#    elif defined(PROTOCOL_CHIBIOS)
++#        include "hal.h"
++#        include "chibios_config.h"
++#        if defined(HT32) || defined(STM32F0XX) || defined(STM32F1XX) || defined(STM32F3XX) || defined(STM32F4XX) || defined(STM32L0XX) || defined(GD32VF103) || defined(MCU_RP)
++#            define MBI_NOPS (40 / (1000000000L / (CPU_CLOCK / 3))) // This calculates how many loops of 3 nops to run to delay 40 ns
++#        else
++#            error MBI_NOPS configuration required
++#            define MBI_NOPS 0 // this just pleases the compile so the above error is easier to spot
++#        endif
++#    endif
++#endif
++
++#define mbi_io_wait                                 \
++    do {                                        \
++        for (int i = 0; i < MBI_NOPS; i++) { \
++            __asm__ volatile("nop\n\t"          \
++                             "nop\n\t"          \
++                             "nop\n\t");        \
++        }                                       \
++    } while (0)
++
++/* MBI INSTRUCTIONS: */
++
++/* Move data in shift-register to a single buffer */
++#ifndef MBI_DATA_LATCH
++#    error "MBI_DATA_LATCH is not defined"
++#endif
++
++/* Move data in all buffers to comparators */
++#ifndef MBI_GLOBAL_LATCH
++#    error "MBI_GLOBAL_LATCH is not defined"
++#endif
++
++/* If previous instruction was MBI_ENABLE_WRITE_CONFIGURATION, then move
++ * data in shift-register to configuration register
++ */
++#if defined(MBI_WRITE_CONFIGURATION) && !defined(MBI_ENABLE_WRITE_CONFIGURATION)
++#    error "MBI_WRITE_CONFIGURATION defined without defining MBI_ENABLE_WRITE_CONFIGURATION"
++#endif
++
++/*
++ * Configuration setting notes for boards defining MBI_CONFIGURATION:
++ * - If "Data Loading" setting exists, select option for <MBI_NUM_CHANNELS> of Data Latch + 1 of Global Latch
++ * - If "N-bit PWM Counter Mode" setting exists, keep it consistent with MBI_SHIFT_REG_WIDTH
++ */
++
++/* (Optional) Configuration value to set each MBI on initialization */
++#if defined(MBI_CONFIGURATION)
++#    if !defined(MBI_WRITE_CONFIGURATION) || !defined(MBI_ENABLE_WRITE_CONFIGURATION)
++#        error "MBI_WRITE_CONFIGURATION and MBI_ENABLE_WRITE_CONFIGURATION must be defined to set MBI_CONFIGURATION"
++#    endif
++#endif
++
++/* Send 'instr' number of DCLK pulses while LE is asserted high. */
++void mbi_send_instruction(uint8_t instr);
++
++/* Transmit `shift_amount` bits of `data` to shift-register. */
++void mbi_shift_data(uint16_t data, uint8_t shift_amount);
++
++/* Transmit `shift_amount` bits of `data` to shift-register, and assert LE for
++ * the last `instr` number of DCLK pulses.
++ *
++ * Note: Assumes `instr` is less than `shift_amount`.
++ */
++void mbi_shift_data_instr(uint16_t data, uint8_t shift_amount, uint8_t instr);
++
++#if defined(MBI_WRITE_CONFIGURATION) && defined(MBI_ENABLE_WRITE_CONFIGURATION)
++/* Write val to each MBI configuration register. */
++void mbi_write_configuration(uint16_t val);
++#endif
++
++/* initialize mbi driver(s) */
++void mbi_init(void);
++void mbi_init_pins(void);
++void mbi_init_config(void);
++void mbi_init_timers(void);
++
++#if (MBI_LED_TYPE == MBI_LED_TYPE_RGB)
++/* write RGB color to back buffer at a specific index */
++void mbi_set_color(int index, uint8_t red, uint8_t green, uint8_t blue);
++/* write RGB color to entire back buffer */
++void mbi_set_color_all(uint8_t red, uint8_t green, uint8_t blue);
++#elif (MBI_LED_TYPE == MBI_LED_TYPE_MONO)
++/* write grayscale value to back buffer at a specific index */
++void mbi_set_value(int index, uint8_t value);
++/* write grayscale value to entire back buffer */
++void mbi_set_value_all(uint8_t value);
++#endif
++/* updates front buffer from back buffer */
++void mbi_flush(void);
++/* activate row/column pin and update buffers for next row/column */
++void mbi_flush_isr(void);
++
++enum mbi_color_ch {
++    MBI_UNUSED_CH,
++    MBI_MONO_CH,
++    MBI_RED_CH,
++    MBI_GREEN_CH,
++    MBI_BLUE_CH,
++};
++
++typedef struct {
++    uint8_t color_channel;
++    uint8_t color_index; // MBI ROW/COL index for the color channel
++} mbi_channel_t;
++
++/* Output channel to color channel mapping */
++extern const mbi_channel_t g_mbi_channels[MBI_NUM_DRIVER][MBI_NUM_CHANNELS];
++
++/* LED Matrix to LED Index */
++#if (MBI_LED_DIRECTION == ROW2COL)
++extern const uint8_t g_mbi_led_matrix_co[MBI_NUM_LED_GPIO_PINS][MBI_NUM_CHANNELS];
++#elif (MBI_LED_DIRECTION == COL2ROW)
++extern const uint8_t g_mbi_led_matrix_co[MBI_NUM_CHANNELS][MBI_NUM_LED_GPIO_PINS];
++#endif
++
++/* LED row/column pins */
++extern pin_t g_mbi_led_pins[MBI_NUM_LED_GPIO_PINS];
+diff --git a/quantum/led_matrix/led_matrix_drivers.c b/quantum/led_matrix/led_matrix_drivers.c
+index bd4852e9..6a377dec 100644
+--- a/quantum/led_matrix/led_matrix_drivers.c
++++ b/quantum/led_matrix/led_matrix_drivers.c
+@@ -129,4 +129,12 @@ const led_matrix_driver_t led_matrix_driver = {
+     .set_value_all = snled27351_set_value_all,
+ };
+ 
++#elif defined(LED_MATRIX_MBI)
++const led_matrix_driver_t led_matrix_driver = {
++    .init          = mbi_init,
++    .flush         = mbi_flush,
++    .set_value     = mbi_set_value,
++    .set_value_all = mbi_set_value_all,
++};
++
+ #endif
+diff --git a/quantum/led_matrix/led_matrix_drivers.h b/quantum/led_matrix/led_matrix_drivers.h
+index 60354e46..3585215e 100644
+--- a/quantum/led_matrix/led_matrix_drivers.h
++++ b/quantum/led_matrix/led_matrix_drivers.h
+@@ -31,6 +31,8 @@
+ #    include "is31fl3746a-mono.h"
+ #elif defined(LED_MATRIX_SNLED27351)
+ #    include "snled27351-mono.h"
++#elif defined(LED_MATRIX_MBI)
++#    include "mbi.h"
+ #endif
+ 
+ typedef struct {
+diff --git a/quantum/rgb_matrix/rgb_matrix_drivers.c b/quantum/rgb_matrix/rgb_matrix_drivers.c
+index 3b45e82c..a0a367cd 100644
+--- a/quantum/rgb_matrix/rgb_matrix_drivers.c
++++ b/quantum/rgb_matrix/rgb_matrix_drivers.c
+@@ -140,6 +140,14 @@ const rgb_matrix_driver_t rgb_matrix_driver = {
+     .set_color_all = aw20216s_set_color_all,
+ };
+ 
++#elif defined(RGB_MATRIX_MBI)
++const rgb_matrix_driver_t rgb_matrix_driver = {
++    .init          = mbi_init,
++    .flush         = mbi_flush,
++    .set_color     = mbi_set_color,
++    .set_color_all = mbi_set_color_all,
++};
++
+ #elif defined(RGB_MATRIX_WS2812)
+ #    if defined(RGBLIGHT_WS2812)
+ #        pragma message "Cannot use RGBLIGHT and RGB Matrix using WS2812 at the same time."
+diff --git a/quantum/rgb_matrix/rgb_matrix_drivers.h b/quantum/rgb_matrix/rgb_matrix_drivers.h
+index 1ea5f081..574ce4e3 100644
+--- a/quantum/rgb_matrix/rgb_matrix_drivers.h
++++ b/quantum/rgb_matrix/rgb_matrix_drivers.h
+@@ -35,6 +35,8 @@
+ #    include "snled27351.h"
+ #elif defined(RGB_MATRIX_WS2812)
+ #    include "ws2812.h"
++#elif defined(RGB_MATRIX_MBI)
++#    include "mbi.h"
+ #endif
+ 
+ typedef struct {
+-- 
+2.43.0
+

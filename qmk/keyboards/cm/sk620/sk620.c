@@ -30,8 +30,9 @@ static bool sk620_handle_raw(uint8_t *data, uint8_t length) {
 }
 
 #    ifdef VIA_ENABLE
-void raw_hid_receive_kb(uint8_t *data, uint8_t length) {
-    sk620_handle_raw(data, length);
+// VIA owns raw_hid_receive(); it offers every packet to via_command_kb() first.
+bool via_command_kb(uint8_t *data, uint8_t length) {
+    return sk620_handle_raw(data, length);
 }
 #    else
 void raw_hid_receive(uint8_t *data, uint8_t length) {

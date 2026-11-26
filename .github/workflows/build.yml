@@ -10,10 +10,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  QMK_FORK: https://github.com/hansemro/qmk_firmware
-  QMK_COMMIT: 162faf9688df0dd3e5f625a3518dfc6d5298d648   # branch cmmkprosrgb_mbi_preview
-
 jobs:
   firmware:
     runs-on: ubuntu-latest
@@ -22,28 +18,22 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi
-          python3 -m venv "$HOME/qmk-venv"
-          "$HOME/qmk-venv/bin/pip" install qmk
-          echo "$HOME/qmk-venv/bin" >> "$GITHUB_PATH"
-      - name: Fetch QMK fork (pinned)
+          sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi python3-venv
+      # build.sh checks out the pinned official QMK submodule, applies patches/qmk and builds
+      - name: Build default keymap
+        run: ./build.sh default
+      - name: Build VIA keymap
+        run: ./build.sh via
+      - name: Check the VIA definition is up to date
         run: |
-          git init qmk_firmware
-          cd qmk_firmware
-          git remote add origin "$QMK_FORK"
-          git fetch --depth 1 origin "$QMK_COMMIT"
-          git checkout FETCH_HEAD
-          git submodule update --init --depth 1 lib/chibios lib/chibios-contrib lib/printf
-      - name: Build
-        run: |
-          cp -r qmk/keyboards/cm/sk620 qmk_firmware/keyboards/cm/
-          cd qmk_firmware
-          make cm/sk620:default
-          sha256sum cm_sk620_default.bin
+          python3 tools/via/gen_via_json.py
+          git diff --exit-code via/
       - uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: qmk_firmware/cm_sk620_default.bin
+          path: |
+            out/cm_sk620_default.bin
+            out/cm_sk620_via.bin
 
   flasher-tests:
     runs-on: ubuntu-latest
@@ -86,7 +76,7 @@ jobs:
         run: |
           name="sk620-qmk-${GITHUB_REF_NAME}"
           mkdir "$name"
-          cp artifacts/firmware/cm_sk620_default.bin artifacts/windows-exe/sk620_flash.exe "$name/"
+          cp artifacts/firmware/*.bin artifacts/windows-exe/sk620_flash.exe via/sk620_iso.json "$name/"
           cp tools/flash/sk620_flash.py tools/flash/FLASHING.txt "$name/"
           (cd "$name" && sha256sum * > SHA256SUMS)
           zip -r "$name.zip" "$name"
@@ -95,4 +85,6 @@ jobs:
           files: |
             sk620-qmk-*.zip
             artifacts/firmware/cm_sk620_default.bin
+            artifacts/firmware/cm_sk620_via.bin
+            via/sk620_iso.json
           generate_release_notes: true

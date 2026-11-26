@@ -1,0 +1,740 @@
+From 6e26139cecf4a3ed66c048c96dd8a5c80aad83a9 Mon Sep 17 00:00:00 2001
+From: Hansem Ro <hansemro@outlook.com>
+Date: Sat, 26 Jul 2025 15:27:38 +0200
+Subject: [PATCH 1/2] Add HT32F1653/4 + HT32F52342/52 MCU support
+
+This includes:
+- HT32F1653/HT32F1654 and HT32F52342/HT32F52352 MCU support via
+  chibios-contrib platform
+- Generic board targets for HT32F1653/4 and HT32F52342/52
+- `ht32-dfu` USB ISP bootloader target
+    - USB ISP flashing support via `ht32-dfu-tool`
+    - support on-demand jumping to ISP
+---
+ data/schemas/keyboard.jsonschema              |  5 +
+ docs/compatible_microcontrollers.md           |  7 ++
+ docs/flashing.md                              | 27 ++++++
+ lib/chibios                                   |  2 +-
+ lib/python/qmk/constants.py                   |  7 +-
+ lib/python/qmk/flashers.py                    | 12 +++
+ .../GENERIC_HT32_F1653_4/board/board.mk       |  8 ++
+ .../GENERIC_HT32_F1653_4/configs/chconf.h     |  8 ++
+ .../GENERIC_HT32_F1653_4/configs/config.h     |  8 ++
+ .../GENERIC_HT32_F1653_4/configs/mcuconf.h    | 97 +++++++++++++++++++
+ .../GENERIC_HT32_F52342_52/board/board.mk     |  8 ++
+ .../GENERIC_HT32_F52342_52/configs/chconf.h   |  8 ++
+ .../GENERIC_HT32_F52342_52/configs/config.h   |  7 ++
+ .../GENERIC_HT32_F52342_52/configs/mcuconf.h  | 97 +++++++++++++++++++
+ platforms/chibios/bootloader.mk               |  5 +
+ platforms/chibios/bootloaders/ht32_dfu.c      | 97 +++++++++++++++++++
+ platforms/chibios/flash.mk                    | 19 ++++
+ platforms/chibios/mcu_selection.mk            | 68 +++++++++++++
+ platforms/chibios/platform.mk                 |  4 +
+ 19 files changed, 492 insertions(+), 2 deletions(-)
+ create mode 100644 platforms/chibios/boards/GENERIC_HT32_F1653_4/board/board.mk
+ create mode 100644 platforms/chibios/boards/GENERIC_HT32_F1653_4/configs/chconf.h
+ create mode 100644 platforms/chibios/boards/GENERIC_HT32_F1653_4/configs/config.h
+ create mode 100644 platforms/chibios/boards/GENERIC_HT32_F1653_4/configs/mcuconf.h
+ create mode 100644 platforms/chibios/boards/GENERIC_HT32_F52342_52/board/board.mk
+ create mode 100644 platforms/chibios/boards/GENERIC_HT32_F52342_52/configs/chconf.h
+ create mode 100644 platforms/chibios/boards/GENERIC_HT32_F52342_52/configs/config.h
+ create mode 100644 platforms/chibios/boards/GENERIC_HT32_F52342_52/configs/mcuconf.h
+ create mode 100644 platforms/chibios/bootloaders/ht32_dfu.c
+
+diff --git a/data/schemas/keyboard.jsonschema b/data/schemas/keyboard.jsonschema
+index 13ceec5a..0f765115 100644
+--- a/data/schemas/keyboard.jsonschema
++++ b/data/schemas/keyboard.jsonschema
+@@ -69,6 +69,10 @@
+                 "cortex-m35p",
+                 "cortex-m55",
+                 "cortex-m85",
++                "HT32F1653",
++                "HT32F1654",
++                "HT32F52342",
++                "HT32F52352",
+                 "MKL26Z64",
+                 "MK20DX128",
+                 "MK20DX256",
+@@ -230,6 +234,7 @@
+                 "custom",
+                 "gd32v-dfu",
+                 "halfkay",
++                "ht32-dfu",
+                 "kiibohd",
+                 "lufa-dfu",
+                 "lufa-ms",
+diff --git a/docs/compatible_microcontrollers.md b/docs/compatible_microcontrollers.md
+index f148c391..466caab6 100644
+--- a/docs/compatible_microcontrollers.md
++++ b/docs/compatible_microcontrollers.md
+@@ -61,6 +61,13 @@ You can also use any ARM chip with USB that [ChibiOS](https://www.chibios.org) s
+ 
+  * [AT32F415](https://www.arterychip.com/en/product/AT32F415.jsp)
+ 
++### Holtek (HT32)
++
++* [HT32F1653](https://web.archive.org/web/20191230160134/https://www.holtek.com/productdetail/-/vg/HT32F1653_1654)
++* [HT32F1654](https://web.archive.org/web/20191230160134/https://www.holtek.com/productdetail/-/vg/HT32F1653_1654)
++* [HT32F52342](https://web.archive.org/web/20190301180837/http://www.holtek.com/productdetail/-/vg/HT32F52342-52)
++* [HT32F52352](https://web.archive.org/web/20190301180837/http://www.holtek.com/productdetail/-/vg/HT32F52342-52)
++
+ ### NXP (Kinetis)
+ 
+  * [MKL26Z64](https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/general-purpose-mcus/kl-series-cortex-m0-plus/kinetis-kl2x-72-96-mhz-usb-ultra-low-power-microcontrollers-mcus-based-on-arm-cortex-m0-plus-core:KL2x)
+diff --git a/docs/flashing.md b/docs/flashing.md
+index 29dc780a..6c0b6782 100644
+--- a/docs/flashing.md
++++ b/docs/flashing.md
+@@ -299,6 +299,33 @@ Flashing sequence:
+ 3. Flash a .bin file
+ 4. Reset the device into application mode (may be done automatically)
+ 
++## HT32 ISP DFU
++
++Many HT32 MCUs come preloaded with a factory USB bootloader that cannot be modified nor deleted.
++
++To ensure compatibility with the HT32-DFU bootloader, make sure this block is present in your `rules.mk`:
++
++```make
++# Bootloader selection
++BOOTLOADER = ht32-dfu
++```
++
++Compatible flashers:
++
++* [ht32-dfu](https://github.com/hansemro/ht32-dfu-tool) / `:flash` target in QMK (recommended command line)
++  ```
++  ht32-dfu-tool --wait --reset write --verify 0 <filename>
++  ```
++
++Flashing sequence:
++
++1. Enter the bootloader using any of the following methods:
++    * Tap the `QK_BOOT` keycode
++    * Otherwise, you need to short `BOOT1` (or `BOOT` if not numbered) to GND (via `BOOT1`/`BOOT` button or jumper), short `RESET` to GND (via `RESET` button or jumper), and then let go of the `BOOT1` bridge
++2. Wait for the OS to detect the device
++3. Flash a .bin file
++4. Reset the device into application mode (may be done automatically)
++
+ ## Kiibohd DFU
+ 
+ Keyboards produced by Input Club use NXP Kinetis microcontrollers rather than STM32, and come with their own [custom bootloader](https://github.com/kiibohd/controller/tree/master/Bootloader), however the process and protocol is largely the same.
+diff --git a/lib/chibios b/lib/chibios
+index 8bd61b80..be44b330 160000
+--- a/lib/chibios
++++ b/lib/chibios
+@@ -1 +1 @@
+-Subproject commit 8bd61b804303f1614d574546c2dd735eeabb09f5
++Subproject commit be44b3305f9a9fe5f2f49a4e7b978db322dc463e
+diff --git a/lib/python/qmk/constants.py b/lib/python/qmk/constants.py
+index e3e47c2b..a708bed9 100644
+--- a/lib/python/qmk/constants.py
++++ b/lib/python/qmk/constants.py
+@@ -22,7 +22,7 @@ QMK_FIRMWARE_UPSTREAM = 'qmk/qmk_firmware'
+ MAX_KEYBOARD_SUBFOLDERS = 5
+ 
+ # Supported processor types
+-CHIBIOS_PROCESSORS = 'cortex-m0', 'cortex-m0plus', 'cortex-m3', 'cortex-m4', 'MKL26Z64', 'MK20DX128', 'MK20DX256', 'MK64FX512', 'MK66FX1M0', 'RP2040', 'STM32F042', 'STM32F072', 'STM32F103', 'STM32F303', 'STM32F401', 'STM32F405', 'STM32F407', 'STM32F411', 'STM32F446', 'STM32G0B1', 'STM32G431', 'STM32G474', 'STM32H723', 'STM32H733', 'STM32L412', 'STM32L422', 'STM32L432', 'STM32L433', 'STM32L442', 'STM32L443', 'GD32VF103', 'WB32F3G71', 'WB32FQ95', 'AT32F415'
++CHIBIOS_PROCESSORS = 'cortex-m0', 'cortex-m0plus', 'cortex-m3', 'cortex-m4', 'MKL26Z64', 'MK20DX128', 'MK20DX256', 'MK64FX512', 'MK66FX1M0', 'RP2040', 'STM32F042', 'STM32F072', 'STM32F103', 'STM32F303', 'STM32F401', 'STM32F405', 'STM32F407', 'STM32F411', 'STM32F446', 'STM32G0B1', 'STM32G431', 'STM32G474', 'STM32H723', 'STM32H733', 'STM32L412', 'STM32L422', 'STM32L432', 'STM32L433', 'STM32L442', 'STM32L443', 'GD32VF103', 'WB32F3G71', 'WB32FQ95', 'AT32F415', 'HT32F1653', 'HT32F1654', 'HT32F52342', 'HT32F52352'
+ LUFA_PROCESSORS = 'at90usb162', 'atmega16u2', 'atmega32u2', 'atmega16u4', 'atmega32u4', 'at90usb646', 'at90usb647', 'at90usb1286', 'at90usb1287', None
+ VUSB_PROCESSORS = 'atmega32a', 'atmega328p', 'atmega328', 'attiny85'
+ 
+@@ -57,6 +57,10 @@ MCU2BOOTLOADER = {
+     "WB32F3G71": "wb32-dfu",
+     "WB32FQ95": "wb32-dfu",
+     "AT32F415": "at32-dfu",
++    "HT32F1653": "ht32-dfu",
++    "HT32F1654": "ht32-dfu",
++    "HT32F52342": "ht32-dfu",
++    "HT32F52352": "ht32-dfu",
+     "atmega16u2": "atmel-dfu",
+     "atmega32u2": "atmel-dfu",
+     "atmega16u4": "atmel-dfu",
+@@ -96,6 +100,7 @@ BOOTLOADER_VIDS_PIDS = {
+     'gd32v-dfu': {("28e9", "0189")},
+     'wb32-dfu': {("342d", "dfa0")},
+     'at32-dfu': {("2e3c", "df11")},
++    'ht32-dfu': {("04d9", "8010")},
+     'bootloadhid': {("16c0", "05df")},
+     'usbasploader': {("16c0", "05dc")},
+     'usbtinyisp': {("1782", "0c9f")},
+diff --git a/lib/python/qmk/flashers.py b/lib/python/qmk/flashers.py
+index 22d9133d..f3c03a1c 100644
+--- a/lib/python/qmk/flashers.py
++++ b/lib/python/qmk/flashers.py
+@@ -190,6 +190,15 @@ def _flash_wb32_dfu_updater(file):
+     cli.run([cmd, '-t', '-s', '0x08000000', '-D', file], capture_output=False)
+ 
+ 
++def _flash_ht32_dfu_tool(file):
++    if shutil.which('ht32-dfu-tool'):
++        cmd = 'ht32-dfu-tool'
++    else:
++        return True
++
++    cli.run([cmd, '-w', 'write' '-v', '0x0', file], capture_output=False)
++
++
+ def _flash_isp(mcu, programmer, file):
+     programmer = 'usbasp' if programmer == 'usbasploader' else 'usbtiny'
+     # Check if the provided mcu has an avrdude-specific name, otherwise pass on what the user provided
+@@ -231,6 +240,9 @@ def flasher(mcu, file):
+     elif bl == 'wb32-dfu':
+         if _flash_wb32_dfu_updater(file):
+             return (True, "Please make sure 'wb32-dfu-updater_cli' is available on your system.")
++    elif bl == 'ht32-dfu':
++        if _flash_ht32_dfu_tool(file):
++            return (True, "Please make sure 'ht32-dfu-tool' is available on your system.")
+     elif bl == 'usbasploader' or bl == 'usbtinyisp':
+         if mcu:
+             _flash_isp(mcu, bl, file)
+diff --git a/platforms/chibios/boards/GENERIC_HT32_F1653_4/board/board.mk b/platforms/chibios/boards/GENERIC_HT32_F1653_4/board/board.mk
+new file mode 100644
+index 00000000..ae461b03
+--- /dev/null
++++ b/platforms/chibios/boards/GENERIC_HT32_F1653_4/board/board.mk
+@@ -0,0 +1,8 @@
++include $(CHIBIOS_CONTRIB)/os/hal/boards/HT_HT32F1653_4/board.mk
++
++# Required include directories
++BOARDINC += $(BOARD_PATH)/board
++
++# Shared variables
++ALLCSRC += $(BOARDSRC)
++ALLINC  += $(BOARDINC)
+diff --git a/platforms/chibios/boards/GENERIC_HT32_F1653_4/configs/chconf.h b/platforms/chibios/boards/GENERIC_HT32_F1653_4/configs/chconf.h
+new file mode 100644
+index 00000000..a558aa4b
+--- /dev/null
++++ b/platforms/chibios/boards/GENERIC_HT32_F1653_4/configs/chconf.h
+@@ -0,0 +1,8 @@
++// Copyright 2024 QMK
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#pragma once
++
++#define CH_CFG_ST_TIMEDELTA 0
++
++#include_next <chconf.h>
+diff --git a/platforms/chibios/boards/GENERIC_HT32_F1653_4/configs/config.h b/platforms/chibios/boards/GENERIC_HT32_F1653_4/configs/config.h
+new file mode 100644
+index 00000000..d5dea111
+--- /dev/null
++++ b/platforms/chibios/boards/GENERIC_HT32_F1653_4/configs/config.h
+@@ -0,0 +1,8 @@
++// Copyright 2024 QMK
++// Copyright 2024 Hansem Ro <hansemro@outlook.com>
++// SPDX-License-Identifier: GPL-2.0-or-later
++#pragma once
++
++#ifndef EARLY_INIT_PERFORM_BOOTLOADER_JUMP
++#    define EARLY_INIT_PERFORM_BOOTLOADER_JUMP TRUE
++#endif
+diff --git a/platforms/chibios/boards/GENERIC_HT32_F1653_4/configs/mcuconf.h b/platforms/chibios/boards/GENERIC_HT32_F1653_4/configs/mcuconf.h
+new file mode 100644
+index 00000000..d4040f1e
+--- /dev/null
++++ b/platforms/chibios/boards/GENERIC_HT32_F1653_4/configs/mcuconf.h
+@@ -0,0 +1,97 @@
++/*
++    ChibiOS - Copyright (C) 2006..2015 Giovanni Di Sirio
++
++    Licensed under the Apache License, Version 2.0 (the "License");
++    you may not use this file except in compliance with the License.
++    You may obtain a copy of the License at
++
++        http://www.apache.org/licenses/LICENSE-2.0
++
++    Unless required by applicable law or agreed to in writing, software
++    distributed under the License is distributed on an "AS IS" BASIS,
++    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++    See the License for the specific language governing permissions and
++    limitations under the License.
++*/
++
++#pragma once
++
++#define HT32F165x_MCUCONF
++
++/*
++ * HT32F165x drivers configuration.
++ * The following settings override the default settings present in
++ * the various device driver implementation headers.
++ * Note that the settings for each driver only have effect if the whole
++ * driver is enabled in halconf.h.
++ *
++ * IRQ priorities:
++ * 15...0       Lowest...Highest.
++ */
++
++/*
++ * HAL driver system settings.
++ */
++#define HT32_CK_HSE_FREQUENCY               8000000UL // 8 MHz
++#define HT32_CKCU_SW                        CKCU_GCCR_SW_PLL
++#define HT32_PLL_USE_HSE                    TRUE
++#define HT32_PLL_FBDIV                      18 // 8 MHz -> 144 MHz
++#define HT32_PLL_OTDIV                      0
++#define HT32_AHB_PRESCALER                  2 // 144 MHz -> 72 MHz
++#define HT32_USB_PRESCALER                  3 // 144 MHz -> 48 MHz
++
++/*
++ * ST driver system settings.
++ */
++#define HT32_ST_USE_HCLK                    TRUE
++#define HT32_ST_IRQ_PRIORITY                8
++
++/*
++ * GPT driver system settings.
++ */
++#define HT32_GPT_USE_BFTM0                  FALSE
++#define HT32_GPT_USE_BFTM1                  FALSE
++#define HT32_GPT_BFTM0_IRQ_PRIORITY         7
++#define HT32_GPT_BFTM1_IRQ_PRIORITY         7
++
++/*
++ * PWM driver system settings.
++ */
++#define HT32_PWM_USE_MCTM0                  FALSE
++#define HT32_PWM_USE_MCTM1                  FALSE
++#define HT32_PWM_USE_GPTM0                  FALSE
++#define HT32_PWM_USE_GPTM1                  FALSE
++
++/*
++ * SPI driver system settings.
++ */
++#define HT32_SPI_USE_SPI0                   FALSE
++#define HT32_SPI_USE_SPI1                   FALSE
++#define HT32_SPI0_IRQ_PRIORITY              9
++#define HT32_SPI1_IRQ_PRIORITY              9
++
++/*
++ * SERIAL driver system settings.
++ */
++#define HT32_SERIAL_USE_USART0              FALSE
++#define HT32_SERIAL_USE_USART1              FALSE
++#define HT32_USART0_IRQ_PRIORITY            12
++#define HT32_USART1_IRQ_PRIORITY            12
++
++/*
++ * UART driver system settings.
++ */
++#define HT32_UART_USE_UART0                 FALSE
++#define HT32_UART_USE_UART1                 FALSE
++#define HT32_UART_USE_USART0                FALSE
++#define HT32_UART_USE_USART1                FALSE
++#define HT32_UART0_IRQ_PRIORITY             12
++#define HT32_UART1_IRQ_PRIORITY             12
++#define HT32_USART0_IRQ_PRIORITY            12
++#define HT32_USART1_IRQ_PRIORITY            12
++
++/*
++ * USB driver system settings.
++ */
++#define HT32_USB_USE_USB0                   TRUE
++#define HT32_USB_USB0_IRQ_PRIORITY          5
+diff --git a/platforms/chibios/boards/GENERIC_HT32_F52342_52/board/board.mk b/platforms/chibios/boards/GENERIC_HT32_F52342_52/board/board.mk
+new file mode 100644
+index 00000000..dd794c6f
+--- /dev/null
++++ b/platforms/chibios/boards/GENERIC_HT32_F52342_52/board/board.mk
+@@ -0,0 +1,8 @@
++include $(CHIBIOS_CONTRIB)/os/hal/boards/HT_HT32F52342_52/board.mk
++
++# Required include directories
++BOARDINC += $(BOARD_PATH)/board
++
++# Shared variables
++ALLCSRC += $(BOARDSRC)
++ALLINC  += $(BOARDINC)
+diff --git a/platforms/chibios/boards/GENERIC_HT32_F52342_52/configs/chconf.h b/platforms/chibios/boards/GENERIC_HT32_F52342_52/configs/chconf.h
+new file mode 100644
+index 00000000..0349c11d
+--- /dev/null
++++ b/platforms/chibios/boards/GENERIC_HT32_F52342_52/configs/chconf.h
+@@ -0,0 +1,8 @@
++// Copyright 2022 QMK
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#pragma once
++
++#define CH_CFG_ST_TIMEDELTA 0
++
++#include_next <chconf.h>
+diff --git a/platforms/chibios/boards/GENERIC_HT32_F52342_52/configs/config.h b/platforms/chibios/boards/GENERIC_HT32_F52342_52/configs/config.h
+new file mode 100644
+index 00000000..a3cff372
+--- /dev/null
++++ b/platforms/chibios/boards/GENERIC_HT32_F52342_52/configs/config.h
+@@ -0,0 +1,7 @@
++// Copyright 2024 Hansem Ro <hansemro@outlook.com>
++// SPDX-License-Identifier: GPL-2.0-or-later
++#pragma once
++
++#ifndef EARLY_INIT_PERFORM_BOOTLOADER_JUMP
++#    define EARLY_INIT_PERFORM_BOOTLOADER_JUMP TRUE
++#endif
+diff --git a/platforms/chibios/boards/GENERIC_HT32_F52342_52/configs/mcuconf.h b/platforms/chibios/boards/GENERIC_HT32_F52342_52/configs/mcuconf.h
+new file mode 100644
+index 00000000..2e46cec6
+--- /dev/null
++++ b/platforms/chibios/boards/GENERIC_HT32_F52342_52/configs/mcuconf.h
+@@ -0,0 +1,97 @@
++/*
++    ChibiOS - Copyright (C) 2006..2015 Giovanni Di Sirio
++
++    Licensed under the Apache License, Version 2.0 (the "License");
++    you may not use this file except in compliance with the License.
++    You may obtain a copy of the License at
++
++        http://www.apache.org/licenses/LICENSE-2.0
++
++    Unless required by applicable law or agreed to in writing, software
++    distributed under the License is distributed on an "AS IS" BASIS,
++    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++    See the License for the specific language governing permissions and
++    limitations under the License.
++*/
++
++#pragma once
++
++#define HT32F523x2_MCUCONF
++
++/*
++ * HT32F523xx drivers configuration.
++ * The following settings override the default settings present in
++ * the various device driver implementation headers.
++ * Note that the settings for each driver only have effect if the whole
++ * driver is enabled in halconf.h.
++ *
++ * IRQ priorities:
++ * 15...0       Lowest...Highest.
++ */
++
++/*
++ * HAL driver system settings.
++ */
++#define HT32_CK_HSE_FREQUENCY               8000000UL // 8 MHz
++#define HT32_CKCU_SW                        CKCU_GCCR_SW_PLL
++#define HT32_PLL_USE_HSE                    TRUE
++#define HT32_PLL_FBDIV                      6 // 8 MHz -> 48 MHz
++#define HT32_PLL_OTDIV                      0
++#define HT32_AHB_PRESCALER                  1 // 48 MHz -> 48 MHz
++#define HT32_USB_PRESCALER                  1 // 48 MHz -> 48 MHz
++
++/*
++ * ST driver system settings.
++ */
++#define HT32_ST_USE_HCLK                    TRUE
++#define HT32_ST_IRQ_PRIORITY                8
++
++/*
++ * GPT driver system settings.
++ */
++#define HT32_GPT_USE_BFTM0                  FALSE
++#define HT32_GPT_USE_BFTM1                  FALSE
++#define HT32_GPT_BFTM0_IRQ_PRIORITY         7
++#define HT32_GPT_BFTM1_IRQ_PRIORITY         7
++
++/*
++ * PWM driver system settings.
++ */
++#define HT32_PWM_USE_MCTM0                  FALSE
++#define HT32_PWM_USE_MCTM1                  FALSE
++#define HT32_PWM_USE_GPTM0                  FALSE
++#define HT32_PWM_USE_GPTM1                  FALSE
++
++/*
++ * SPI driver system settings.
++ */
++#define HT32_SPI_USE_SPI0                   FALSE
++#define HT32_SPI_USE_SPI1                   FALSE
++#define HT32_SPI0_IRQ_PRIORITY              9
++#define HT32_SPI1_IRQ_PRIORITY              9
++
++/*
++ * SERIAL driver system settings.
++ */
++#define HT32_SERIAL_USE_USART0              FALSE
++#define HT32_SERIAL_USE_USART1              FALSE
++#define HT32_USART0_IRQ_PRIORITY            12
++#define HT32_USART1_IRQ_PRIORITY            12
++
++/*
++ * UART driver system settings.
++ */
++#define HT32_UART_USE_UART0                 FALSE
++#define HT32_UART_USE_UART1                 FALSE
++#define HT32_UART_USE_USART0                FALSE
++#define HT32_UART_USE_USART1                FALSE
++#define HT32_UART0_IRQ_PRIORITY             12
++#define HT32_UART1_IRQ_PRIORITY             12
++#define HT32_USART0_IRQ_PRIORITY            12
++#define HT32_USART1_IRQ_PRIORITY            12
++
++/*
++ * USB driver system settings.
++ */
++#define HT32_USB_USE_USB0                   TRUE
++#define HT32_USB_USB0_IRQ_PRIORITY          5
+diff --git a/platforms/chibios/bootloader.mk b/platforms/chibios/bootloader.mk
+index e292e1e0..97ff8740 100644
+--- a/platforms/chibios/bootloader.mk
++++ b/platforms/chibios/bootloader.mk
+@@ -27,6 +27,7 @@
+ #     apm32-dfu    APM32 USB DFU in ROM
+ #     wb32-dfu     WB32 USB DFU in ROM
+ #     at32-dfu     AT32 USB DFU in ROM
++#     ht32-dfu     HT32 USB DFU in ROM
+ #     tinyuf2      TinyUF2
+ #     rp2040       Raspberry Pi RP2040
+ # Current options for RISC-V:
+@@ -128,6 +129,10 @@ ifeq ($(strip $(BOOTLOADER)), at32-dfu)
+     DFU_ARGS ?= -d 2E3C:DF11 -a 0 -s 0x08000000:leave
+     DFU_SUFFIX_ARGS ?= -v 2E3C -p DF11
+ endif
++ifeq ($(strip $(BOOTLOADER)), ht32-dfu)
++    OPT_DEFS += -DBOOTLOADER_HT32_DFU
++    BOOTLOADER_TYPE = ht32_dfu
++endif
+ 
+ ifeq ($(strip $(BOOTLOADER_TYPE)),)
+     ifneq ($(strip $(BOOTLOADER)),)
+diff --git a/platforms/chibios/bootloaders/ht32_dfu.c b/platforms/chibios/bootloaders/ht32_dfu.c
+new file mode 100644
+index 00000000..76657abd
+--- /dev/null
++++ b/platforms/chibios/bootloaders/ht32_dfu.c
+@@ -0,0 +1,97 @@
++/* Copyright 2021-2023 QMK
++ * Copyright 2024 Hansem Ro <hansemro@outlook.com>
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include "bootloader.h"
++
++#include <ch.h>
++#include <hal.h>
++#include <util.h>
++
++extern uint32_t __ram0_end__;
++
++/* This code should be checked whether it runs correctly on platforms */
++#define SYMVAL(sym) (uint32_t)(((uint8_t *)&(sym)) - ((uint8_t *)0))
++#define BOOTLOADER_MAGIC 0xDEADBEEF
++#define MAGIC_ADDR (unsigned long *)(SYMVAL(__ram0_end__) - 4)
++
++__attribute__((weak)) void bootloader_marker_enable(void) {
++    uint32_t *marker = (uint32_t *)MAGIC_ADDR;
++    *marker          = BOOTLOADER_MAGIC; // set magic flag => reset handler will jump into boot loader
++}
++
++__attribute__((weak)) bool bootloader_marker_active(void) {
++    const uint32_t *marker = (const uint32_t *)MAGIC_ADDR;
++    return (*marker == BOOTLOADER_MAGIC);
++}
++
++__attribute__((weak)) void bootloader_marker_disable(void) {
++    uint32_t *marker = (uint32_t *)MAGIC_ADDR;
++    *marker          = 0;
++}
++
++__attribute__((weak)) void bootloader_jump(void) {
++    bootloader_marker_enable();
++    NVIC_SystemReset();
++}
++
++__attribute__((weak)) void mcu_reset(void) {
++    NVIC_SystemReset();
++}
++
++void enter_bootloader_mode_if_requested(void) {
++    if (bootloader_marker_active()) {
++        bootloader_marker_disable();
++
++        struct system_memory_vector_t {
++            uint32_t stack_top;
++            void (*entrypoint)(void);
++        };
++        const struct system_memory_vector_t *bootloader = (const struct system_memory_vector_t *)(HT32_BOOTLOADER_ADDRESS);
++
++        __disable_irq();
++
++        SysTick->CTRL = 0;
++        SysTick->VAL  = 0;
++        SysTick->LOAD = 0;
++
++#if defined(HT32F1653) || defined(HT32F1654)
++        // Set SBVT[n] to prevent ISP's SYSTICK ISR from jumping back to main flash
++        FMC->SBVT[0] = HT32_BOOTLOADER_ADDRESS;
++        FMC->SBVT[1] = HT32_BOOTLOADER_ADDRESS + 0x4;
++        FMC->SBVT[2] = HT32_BOOTLOADER_ADDRESS + 0x8;
++        FMC->SBVT[3] = HT32_BOOTLOADER_ADDRESS + 0xc;
++#else // defined(HT32F52342) || defined(HT32F52352)
++        // Set MCUDBGCR to prevent ISP's SYSTICK ISR from jumping back to main flash
++        CKCU->MCUDBGCR |= CKCU_MCUDBGCR_DBWDT;
++#endif
++
++        // Clear interrupt enable and interrupt pending registers
++        for (int i = 0; i < ARRAY_SIZE(NVIC->ICER); i++) {
++            NVIC->ICER[i] = 0xFFFFFFFF;
++            NVIC->ICPR[i] = 0xFFFFFFFF;
++        }
++
++        __set_CONTROL(0);
++        __set_MSP(bootloader->stack_top);
++        __enable_irq();
++
++        // Jump to bootloader
++        bootloader->entrypoint();
++        while (true) {
++        }
++    }
++}
+diff --git a/platforms/chibios/flash.mk b/platforms/chibios/flash.mk
+index f4db17a5..ca192527 100644
+--- a/platforms/chibios/flash.mk
++++ b/platforms/chibios/flash.mk
+@@ -23,6 +23,23 @@ define EXEC_DFU_UTIL
+ 	$(DFU_UTIL) $(DFU_ARGS) -D $(BUILD_DIR)/$(TARGET).bin
+ endef
+ 
++HT32_DFU_TOOL ?= ht32-dfu-tool
++HT32_DFU_TOOL_WRITE_ADDR ?= 0x0
++
++define EXEC_HT32_DFU_TOOL
++	if ! $(HT32_DFU_TOOL) list | grep -q "Device"; then \
++		printf "$(MSG_BOOTLOADER_NOT_FOUND_QUICK_RETRY)" ;\
++		sleep $(BOOTLOADER_RETRY_TIME) ;\
++		while ! $(HT32_DFU_TOOL) list | grep -q "Device"; do \
++			printf "." ;\
++			sleep $(BOOTLOADER_RETRY_TIME) ;\
++		done ;\
++		printf "\n" ;\
++	fi
++	$(HT32_DFU_TOOL) info
++	$(HT32_DFU_TOOL) -r write $(HT32_DFU_TOOL_WRITE_ADDR) $(BUILD_DIR)/$(TARGET).bin
++endef
++
+ WB32_DFU_UPDATER ?= wb32-dfu-updater_cli
+ 
+ define EXEC_WB32_DFU_UPDATER
+@@ -115,6 +132,8 @@ else ifeq ($(strip $(MCU_FAMILY)),WB32)
+ 	$(UNSYNC_OUTPUT_CMD) && $(call EXEC_WB32_DFU_UPDATER)
+ else ifeq ($(strip $(MCU_FAMILY)),AT32)
+ 	$(UNSYNC_OUTPUT_CMD) && $(call EXEC_DFU_UTIL)
++else ifeq ($(strip $(MCU_FAMILY)),HT32)
++	$(UNSYNC_OUTPUT_CMD) && $(call EXEC_HT32_DFU_TOOL)
+ else ifeq ($(strip $(MCU_FAMILY)),GD32V)
+ 	$(UNSYNC_OUTPUT_CMD) && $(call EXEC_DFU_UTIL)
+ else
+diff --git a/platforms/chibios/mcu_selection.mk b/platforms/chibios/mcu_selection.mk
+index 199bdb23..88301008 100644
+--- a/platforms/chibios/mcu_selection.mk
++++ b/platforms/chibios/mcu_selection.mk
+@@ -878,6 +878,74 @@ ifneq ($(findstring AT32F415, $(MCU)),)
+   AT32_BOOTLOADER_ADDRESS ?= 0x1FFFAC00
+ endif
+ 
++ifneq (,$(filter $(MCU),HT32F1653 HT32F1654))
++  # Cortex version
++  MCU = cortex-m3
++
++  # ARM version, CORTEX-M0/M1 are 6, CORTEX-M3/M4/M7 are 7
++  ARMV = 7
++
++  ## chip/board settings
++  # - the next two should match the directories in
++  #   <chibios[-contrib]>/os/hal/ports/$(MCU_PORT_NAME)/$(MCU_SERIES)
++  #   OR
++  #   <chibios[-contrib]>/os/hal/ports/$(MCU_FAMILY)/$(MCU_SERIES)
++  MCU_FAMILY = HT32
++  MCU_SERIES = HT32F165x
++
++  # Linker script to use
++  # - it should exist either in <chibios>/os/common/ports/ARMCMx/compilers/GCC/ld/
++  #   or <keyboard_dir>/ld/
++  MCU_LDSCRIPT ?= HT32F1654
++
++  # Startup code to use
++  #  - it should exist in <chibios>/os/common/startup/ARMCMx/compilers/GCC/mk/
++  MCU_STARTUP ?= ht32f165x
++
++  # Board: it should exist either in <chibios>/os/hal/boards/,
++  # <keyboard_dir>/boards/, or drivers/boards/
++  BOARD ?= GENERIC_HT32_F1653_4
++
++  USE_FPU ?= no
++
++  # Bootloader address for HT32 DFU
++  HT32_BOOTLOADER_ADDRESS ?= 0x1F000000
++endif
++
++ifneq (,$(filter $(MCU),HT32F52342 HT32F52352))
++  # Cortex version
++  MCU = cortex-m0plus
++
++  # ARM version, CORTEX-M0/M1 are 6, CORTEX-M3/M4/M7 are 7
++  ARMV = 6
++
++  ## chip/board settings
++  # - the next two should match the directories in
++  #   <chibios[-contrib]>/os/hal/ports/$(MCU_PORT_NAME)/$(MCU_SERIES)
++  #   OR
++  #   <chibios[-contrib]>/os/hal/ports/$(MCU_FAMILY)/$(MCU_SERIES)
++  MCU_FAMILY = HT32
++  MCU_SERIES = HT32F523xx
++
++  # Linker script to use
++  # - it should exist either in <chibios>/os/common/ports/ARMCMx/compilers/GCC/ld/
++  #   or <keyboard_dir>/ld/
++  MCU_LDSCRIPT ?= HT32F52352
++
++  # Startup code to use
++  #  - it should exist in <chibios>/os/common/startup/ARMCMx/compilers/GCC/mk/
++  MCU_STARTUP ?= ht32f523xx
++
++  # Board: it should exist either in <chibios>/os/hal/boards/,
++  # <keyboard_dir>/boards/, or drivers/boards/
++  BOARD ?= GENERIC_HT32_F52342_52
++
++  USE_FPU ?= no
++
++  # Bootloader address for HT32 DFU
++  HT32_BOOTLOADER_ADDRESS ?= 0x1F000000
++endif
++
+ ifneq ($(findstring GD32VF103, $(MCU)),)
+   # RISC-V
+   MCU = risc-v
+diff --git a/platforms/chibios/platform.mk b/platforms/chibios/platform.mk
+index cf9fac25..881d0549 100644
+--- a/platforms/chibios/platform.mk
++++ b/platforms/chibios/platform.mk
+@@ -159,6 +159,10 @@ ifdef AT32_BOOTLOADER_ADDRESS
+     OPT_DEFS += -DAT32_BOOTLOADER_ADDRESS=$(AT32_BOOTLOADER_ADDRESS)
+ endif
+ 
++ifdef HT32_BOOTLOADER_ADDRESS
++    OPT_DEFS += -DHT32_BOOTLOADER_ADDRESS=$(HT32_BOOTLOADER_ADDRESS)
++endif
++
+ # Work out if we need to set up the include for the bootloader definitions
+ ifneq ("$(wildcard $(KEYBOARD_PATH_5)/bootloader_defs.h)","")
+     OPT_DEFS += -include $(KEYBOARD_PATH_5)/bootloader_defs.h
+-- 
+2.43.0
+

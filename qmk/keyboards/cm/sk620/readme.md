@@ -9,7 +9,13 @@
 Hardware: Holtek HT32F52352 (printed HT50F52352), 3x Macroblock MBIA043GP, 512 KiB SPI flash.
 Pin map and how it was found: https://github.com/clawntl/qmk-sk620
 
-Make example for this keyboard (after setting up your build environment):
+This folder needs QMK with HT32 and MBIA043 support. From https://github.com/clawntl/qmk-sk620,
+which applies that support to official QMK and builds:
+
+    ./build.sh          # default keymap
+    ./build.sh via      # VIA-enabled keymap
+
+Inside such a QMK tree, the usual command also works:
 
     make cm/sk620:default
 
