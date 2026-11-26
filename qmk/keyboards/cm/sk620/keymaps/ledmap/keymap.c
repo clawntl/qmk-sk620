@@ -6,7 +6,9 @@
 //   two keys at once          -> undo: go back one step
 //   key flashes red           -> that key was already recorded for an earlier LED;
 //                                tap it again straight away if it really has a second LED
-// When every LED has been done, all recorded keys glow green (review mode):
+// When every LED position has been done, all recorded keys turn blue (review mode).
+// Positions after the last real LED are usually empty, so expect to hold a few more times
+// with everything green and nothing white, until the keys turn blue. In review mode:
 //   press a key               -> its LED turns white, so you can check it
 //   hold Enter for 1 s        -> types the result into whatever text editor has focus
 //
@@ -209,7 +211,12 @@ static uint8_t led_for(uint8_t code) {
 bool rgb_matrix_indicators_user(void) {
     rgb_matrix_set_color_all(0, 0, 0);
     for (uint8_t i = 0; i < step && i < n_leds; i++) {
-        if (assigned[i] != NO_KEY) rgb_matrix_set_color(leds[i], 0, 40, 0);
+        if (assigned[i] == NO_KEY) continue;
+        if (review) {
+            rgb_matrix_set_color(leds[i], 0, 0, 60); // blue: finished
+        } else {
+            rgb_matrix_set_color(leds[i], 0, 40, 0); // green: recorded, still mapping
+        }
     }
     if (review) {
         if (down_count == 1 && !chord) {

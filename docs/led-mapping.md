@@ -16,8 +16,8 @@ The LED driver table copied from the stock firmware has 108 LED positions wired 
 4. Repeat steps 2 and 3. Done keys stay dim green, so you can see your progress.
 5. **Made a mistake?** **Press any two keys at the same time** to go back one step. Do this again to go back further.
 6. **A key flashes red?** That key was already recorded for an earlier LED, so you probably meant a different key. If that key really has a second LED under it (the space bar might), tap it again straight away to record it anyway.
-7. **Check.** After the last position, **every key glows dim green**. A key that isn't green was missed: go back with two keys and redo it. You can also press any key to make its LED turn white.
-8. **Type the result.** Click into your text editor with the mouse, then **hold Enter for 1 second**. The keyboard types about 70 lines, starting with `sk620 ledmap 1` and ending with `end`. Don't touch the keyboard until it finishes (about 10 seconds).
+7. **Keep going until the keys turn blue.** Once every key is green, there are usually a few empty positions left. Nothing is white, so keep holding any key for a second, one hold at a time, until **all the keys turn blue**: that means finished. A key that isn't blue was missed: go back with two keys and redo it. Press any key to make its LED turn white and check it.
+8. **Type the result.** With the keys blue, click into your text editor with the mouse, then **hold Enter for 1 second**. The keyboard types about 70 lines, starting with `sk620 ledmap 1` and ending with `end`. Don't touch the keyboard until it finishes (about 10 seconds).
 9. **Save or copy the text.** That's the result.
 10. **Flash your normal firmware back** with `sk620_flash`. It still switches the keyboard into the bootloader by itself. Your lighting settings are untouched.
 
