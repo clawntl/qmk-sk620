@@ -88,13 +88,13 @@ mkdir -p "$TREE/keyboards/cm"
 cp -r "$ROOT/qmk/keyboards/cm/sk620" "$TREE/keyboards/cm/sk620"
 
 # ---- 4. Python venv (local to this folder) -----------------------------------------------
-REQ_STAMP="$(sha256sum "$TREE/requirements.txt" | cut -d' ' -f1)"
+REQ_STAMP="$(sha256sum "$TREE/requirements.txt" | cut -d' ' -f1)+qmk-cli"
 if [ ! -x "$VENV/bin/python" ] || [ "$(cat "$VENV/.sk620-stamp" 2>/dev/null)" != "$REQ_STAMP" ]; then
     say "creating Python venv in .build/venv"
     rm -rf "$VENV"
     python3 -m venv "$VENV" || die "python3 -m venv failed (Debian/Ubuntu: install python3-venv)"
     "$VENV/bin/pip" install -q --upgrade pip
-    "$VENV/bin/pip" install -q -r "$TREE/requirements.txt"
+    "$VENV/bin/pip" install -q -r "$TREE/requirements.txt" qmk   # qmk = the CLI the Makefile calls
     echo "$REQ_STAMP" > "$VENV/.sk620-stamp"
 fi
 export PATH="$VENV/bin:$PATH"
