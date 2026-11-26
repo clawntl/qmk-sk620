@@ -62,7 +62,9 @@ That matches hansemro's `mbi` driver ordering. `g_mbi_channels` is therefore an 
 
 The stock firmware's LED position table (at 0xC946) maps LED row x MBIA channel to a stock LED number. 108 of the 128 positions appear in it. Stock LED *n* sits on a 17 x 7 grid at column *n* / 7, row *n* % 7, a grid shared with larger Cooler Master boards.
 
-The [LED mapper](led-mapping.md) showed that only **65 LEDs are fitted**, one under each key, all on MBIA channels 0–8. The other 43 table positions drive nothing. The fitted LEDs match the stock grid exactly: grid rows 1–5 are the key rows, and grid columns follow the key columns. Every empty position is in grid row 0 or 6, in column 0 or 16, or in a gap in the key rows (beside the space bar, above the ISO Enter). ![SK620 LED map](images/led-map.svg)
+The [LED mapper](led-mapping.md) showed that only **65 LEDs are fitted**, one under each key, all on MBIA channels 0–8. The other 43 table positions drive nothing. The fitted LEDs match the stock grid exactly: grid rows 1–5 are the key rows, and grid columns follow the key columns. Every empty position is in grid row 0 or 6, in column 0 or 16, or in a gap in the key rows (beside the space bar, above the ISO Enter).
+
+![SK620 LED map](images/led-map.svg)
 
 The raw result is in [`tools/ledmap/sk620_iso_ledmap.txt`](../tools/ledmap/sk620_iso_ledmap.txt). `tools/ledmap/apply_ledmap.py` turned it into the `rgb_matrix` layout in `keyboard.json` (LEDs in row order, each linked to its key) and the `g_mbi_led_matrix_co` table in `sk620.c`, where empty positions are `NLD`.
 
