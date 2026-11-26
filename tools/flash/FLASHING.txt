@@ -2,13 +2,13 @@ Cooler Master SK620 - QMK flasher
 =================================
 
 Files
-  cm_sk620_default.bin  the QMK firmware
-  cm_sk620_via.bin      the same, plus VIA support: change keys and lighting
-                        from https://usevia.app (choose it with Browse...)
+  cm_sk620_default.bin  the QMK firmware, with VIA: change keys, macros and
+                        lighting from the PC with OpenPeriph or usevia.app
   cm_sk620_ledmap.bin   one-off tool to find which LED is under which key
                         (see docs/led-mapping.md); flash default back after
-  sk620_iso.json        VIA definition: in usevia.app, Settings > Show Design
-                        tab, then Design > Load this file
+  sk620_iso.json        VIA definition, only needed for usevia.app (Settings >
+                        Show Design tab, then Design > Load this file).
+                        OpenPeriph (github.com/clawntl/openperiph) has it built in
   sk620_flash.exe       flasher for Windows (no install, no drivers)
   sk620_flash.py        the same flasher for Linux (needs only python3)
 

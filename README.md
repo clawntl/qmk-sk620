@@ -15,7 +15,7 @@ The pins were never probed by hand. They were read out of Cooler Master's own SK
 | RGB effects that react to key presses (splash, reactive, typing heatmap) | Working, confirmed on hardware |
 | Caps Lock / Windows-key lock indicators (on the key's own LED) | Built; not yet tried on hardware |
 | Settings saved across unplugs (SPI flash) | Working, confirmed on hardware |
-| Change keys and lighting from the PC (VIA) | Built (`cm_sk620_via.bin`); not yet tried on hardware |
+| Change keys, macros and lighting from the PC (VIA, in the default firmware) | Built; works with [OpenPeriph](https://github.com/clawntl/openperiph) and usevia.app; not yet tried on hardware |
 | ANSI (US) SK620 | Matrix is the same; needs an ANSI layout and keymap |
 | SK622 (Bluetooth model) | Not supported |
 | One-step flasher with GUI, no dependencies | Working on Linux (CachyOS), including automatic bootloader entry; Windows build not yet tried on hardware |
@@ -49,7 +49,7 @@ For the **first flash** over Cooler Master's firmware, open the case, bridge the
 
 ## Changing settings from the PC
 
-Flash `cm_sk620_via.bin` instead of the default firmware, then open [usevia.app](https://usevia.app) in Chrome or Edge (Windows or Linux, nothing to install) to remap keys on 4 layers, record macros, and set the lighting effect, brightness, speed and colour. See [docs/configuring.md](docs/configuring.md).
+The firmware has VIA built in. Use [OpenPeriph](https://github.com/clawntl/openperiph) (a desktop app for Windows and Linux that knows the SK620 out of the box) or [usevia.app](https://usevia.app) in Chrome or Edge to remap keys on 4 layers, record macros, and set the lighting effect, brightness, speed and colour. Changes are stored on the keyboard. See [docs/configuring.md](docs/configuring.md).
 
 ## Building
 
@@ -59,7 +59,7 @@ Everything needed is in this repository: official QMK as a pinned submodule, the
 sudo pacman -Syu && sudo pacman -S --needed git make python arm-none-eabi-gcc arm-none-eabi-newlib
 git clone --recurse-submodules https://github.com/clawntl/qmk-sk620
 cd qmk-sk620
-./build.sh        # out/cm_sk620_default.bin   (./build.sh via -> out/cm_sk620_via.bin)
+./build.sh        # out/cm_sk620_default.bin
 ```
 
 `build.sh` writes only inside the repository and uses its own Python venv. Details, and flashing with `ht32-dfu-tool` instead, are in [docs/flashing.md](docs/flashing.md).
@@ -87,7 +87,7 @@ With RGB on, Caps Lock lights the Caps Lock key white and the Windows-key lock l
 build.sh                   builds the firmware into out/ from the files below
 qmk_firmware/              official QMK, git submodule pinned to a tested commit (not modified)
 patches/qmk/               HT32 MCU and MBIA043 LED driver support, applied by build.sh
-qmk/keyboards/cm/sk620/    the SK620 keyboard definition and keymaps (default, via, ledmap)
+qmk/keyboards/cm/sk620/    the SK620 keyboard definition and keymaps (default with VIA, ledmap)
 via/sk620_iso.json         VIA definition, to load in usevia.app
 docs/hardware.md           pin map, matrix, LED driver wiring, protection bits
 docs/flashing.md           flashing, building, recovery

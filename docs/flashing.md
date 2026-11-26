@@ -56,8 +56,8 @@ sudo pacman -S --needed git make python arm-none-eabi-gcc arm-none-eabi-newlib
 ```sh
 git clone --recurse-submodules https://github.com/clawntl/qmk-sk620
 cd qmk-sk620
-./build.sh            # out/cm_sk620_default.bin
-./build.sh via        # out/cm_sk620_via.bin, for configuring from the PC (see configuring.md)
+./build.sh            # out/cm_sk620_default.bin (VIA enabled, see configuring.md)
+./build.sh ledmap     # out/cm_sk620_ledmap.bin, the LED mapper (see led-mapping.md)
 ```
 
 `build.sh` works the same in fish, bash or zsh, since it runs under bash itself. It writes only inside the repository:

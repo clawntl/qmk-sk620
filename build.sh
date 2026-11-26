@@ -2,7 +2,7 @@
 # Build the SK620 QMK firmware from this repository alone.
 #
 #   ./build.sh            -> out/cm_sk620_default.bin
-#   ./build.sh via        -> out/cm_sk620_via.bin
+#   ./build.sh ledmap     -> out/cm_sk620_ledmap.bin (LED mapper, see docs/led-mapping.md)
 #   ./build.sh clean      -> remove .build/ (the patched QMK copy and the Python venv)
 #
 # What it does (nothing outside this folder is touched, no sudo):

@@ -1,4 +1,6 @@
 // SK620 UK ISO default keymap. Base layer = Cooler Master's stock EU keymap.
+// VIA is enabled (rules.mk), so these are the starting layers: changes made in OpenPeriph or
+// usevia.app are stored on the keyboard. Flashing a new build resets them to these.
 #include QMK_KEYBOARD_H
 #include "keymap_uk.h"
 

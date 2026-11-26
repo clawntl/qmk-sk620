@@ -12,8 +12,8 @@ Pin map and how it was found: https://github.com/clawntl/qmk-sk620
 This folder needs QMK with HT32 and MBIA043 support. From https://github.com/clawntl/qmk-sk620,
 which applies that support to official QMK and builds:
 
-    ./build.sh          # default keymap
-    ./build.sh via      # VIA-enabled keymap
+    ./build.sh          # default keymap (VIA enabled)
+    ./build.sh ledmap   # LED-to-key mapper
 
 Inside such a QMK tree, the usual command also works:
 

@@ -22,8 +22,6 @@ jobs:
       # build.sh checks out the pinned official QMK submodule, applies patches/qmk and builds
       - name: Build default keymap
         run: ./build.sh default
-      - name: Build VIA keymap
-        run: ./build.sh via
       - name: Build LED mapper
         run: ./build.sh ledmap
       - name: Check the VIA definition is up to date
@@ -35,7 +33,6 @@ jobs:
           name: firmware
           path: |
             out/cm_sk620_default.bin
-            out/cm_sk620_via.bin
             out/cm_sk620_ledmap.bin
 
   flasher-tests:
@@ -88,6 +85,5 @@ jobs:
           files: |
             sk620-qmk-*.zip
             artifacts/firmware/cm_sk620_default.bin
-            artifacts/firmware/cm_sk620_via.bin
             via/sk620_iso.json
           generate_release_notes: true
