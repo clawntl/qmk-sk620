@@ -103,6 +103,10 @@ tools/analysis/            Unicorn-based emulator and the scripts that produced 
 tools/porting/             pin-finder firmware and log-to-QMK script for boards without stock firmware
 ```
 
+## Releases
+
+GitHub Actions builds everything on every push. To publish a release, change `VERSION` (and `RELEASE_NOTES.md`) on `main`: the Build workflow then tags `v<VERSION>` and uploads the zip, firmware, flasher and VIA definition. Pushing a `v*` tag yourself works too.
+
 ## Credits
 
 - **Hansem Ro (hansemro)** for HT32 support in QMK and ChibiOS and the MBIA043 driver (the two patches in `patches/qmk`), the MasterKeys ports this builds on, and `ht32-dfu-tool`.
