@@ -1,0 +1,37 @@
+{
+    "manufacturer": "DIY",
+    "keyboard_name": "SK620 pin finder",
+    "maintainer": "you",
+    "processor": "HT32F52352",
+    "board": "GENERIC_HT32_F52342_52",
+    "bootloader": "ht32-dfu",
+    "build": {
+        "firmware_format": "bin"
+    },
+    "diode_direction": "COL2ROW",
+    "usb": {
+        "vid": "0xFEED",
+        "pid": "0x6201",
+        "device_version": "0.0.1"
+    },
+    "features": {
+        "bootmagic": false,
+        "extrakey": false,
+        "mousekey": false,
+        "nkro": false
+    },
+    "matrix_pins": {
+        "custom_lite": true
+    },
+    "matrix_size": {
+        "rows": 1,
+        "cols": 1
+    },
+    "layouts": {
+        "LAYOUT": {
+            "layout": [
+                {"matrix": [0, 0], "x": 0, "y": 0}
+            ]
+        }
+    }
+}

@@ -1,0 +1,8 @@
+# build output and vendor files: never commit Cooler Master updaters or firmware
+*.bin
+*.hex
+*.exe
+*.zip
+.build/
+__pycache__/
+out/
