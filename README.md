@@ -12,7 +12,8 @@ The pins were never probed by hand. They were read out of Cooler Master's own SK
 | Fn layer from the keycap legends | Working |
 | Per-key RGB (MBIA043 driver) | Lights and animates, confirmed on hardware |
 | LED-to-key mapping (65 LEDs, one per key) | Mapped on hardware ([docs/led-mapping.md](docs/led-mapping.md)) |
-| RGB effects that react to key presses (splash, reactive, typing heatmap) | Built with the mapping; not yet tried on hardware |
+| RGB effects that react to key presses (splash, reactive, typing heatmap) | Working, confirmed on hardware |
+| Caps Lock / Windows-key lock indicators (on the key's own LED) | Built; not yet tried on hardware |
 | Settings saved across unplugs (SPI flash) | Working, confirmed on hardware |
 | Change keys and lighting from the PC (VIA) | Built (`cm_sk620_via.bin`); not yet tried on hardware |
 | ANSI (US) SK620 | Matrix is the same; needs an ANSI layout and keymap |
@@ -77,6 +78,8 @@ Layer 0 is the stock UK layout, taken directly from Cooler Master's firmware. Th
 | [ / ] | Home / Page Up | ← / → | Previous / next RGB effect |
 | ; / ' | End / Page Down | Q W E / A S D | Hue, saturation, speed up / down |
 | B | Bootloader | | |
+
+With RGB on, Caps Lock lights the Caps Lock key white and the Windows-key lock lights the Windows key red, on top of the current effect.
 
 ## Repository layout
 

@@ -45,7 +45,9 @@ python3 tools/ledmap/apply_ledmap.py result.txt
 
 It rewrites `rgb_matrix.layout` in `keyboard.json` (each LED gets its key's matrix position and physical x/y) and the LED table in `sk620.c`, where positions with nothing fitted become `NLD`. The script expects the table to still use stock LED numbers, which is what the mapper steps through.
 
-The SK620 ISO result is in [`tools/ledmap/sk620_iso_ledmap.txt`](../tools/ledmap/sk620_iso_ledmap.txt) and has been applied. The board has 65 LEDs, one per key. The first run recorded two empty positions as Space, because some hold-to-skip presses on Space were let go before 0.6 s. Both sit in the empty rows of the stock grid, so they were corrected by hand to dark. The mapper now blinks on every skip and no longer accepts a second LED for the same key.
+![SK620 LED map: the stock LED number under each key, and the stock 17 x 7 LED grid](images/led-map.svg)
+
+The SK620 ISO result is in [`tools/ledmap/sk620_iso_ledmap.txt`](../tools/ledmap/sk620_iso_ledmap.txt) and has been applied. The board has 65 LEDs, one per key. The first run recorded two empty positions as Space, because some hold-to-skip presses on Space were let go before 0.6 s. Both sit in the empty rows of the stock grid (red above), so they were corrected by hand to dark. The picture is generated with `python3 tools/ledmap/draw_ledmap.py tools/ledmap/sk620_iso_ledmap.txt docs/images/led-map.svg`. The mapper now blinks on every skip and no longer accepts a second LED for the same key.
 
 ## How it works
 

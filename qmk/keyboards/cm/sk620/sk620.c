@@ -73,4 +73,21 @@ const uint8_t g_mbi_led_matrix_co[MBI_NUM_LED_GPIO_PINS][MBI_NUM_CHANNELS] = {
     {   7,  21,  35,  49,  42, NLD,  27, NLD,  62, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
 };
 // clang-format on
+
+// Lock indicators drawn on top of whatever effect is running: the SK620 has no separate
+// indicator LEDs, so Caps Lock lights the Caps Lock key white and the Windows-key lock
+// (Fn+Right Shift) lights the Windows key red.
+static void sk620_light_key(uint8_t row, uint8_t col, uint8_t r, uint8_t g, uint8_t b) {
+    uint8_t led = g_led_config.matrix_co[row][col];
+    if (led != NO_LED) rgb_matrix_set_color(led, r, g, b);
+}
+
+bool rgb_matrix_indicators_kb(void) {
+    if (!rgb_matrix_indicators_user()) return false;
+    // at least half brightness so the indicator stays visible on dim settings
+    uint8_t v = rgb_matrix_get_val() < 100 ? 100 : rgb_matrix_get_val();
+    if (host_keyboard_led_state().caps_lock) sk620_light_key(2, 0, v, v, v); // Caps Lock key
+    if (keymap_config.no_gui) sk620_light_key(4, 1, v, 0, 0);               // left Windows key
+    return true;
+}
 #endif
