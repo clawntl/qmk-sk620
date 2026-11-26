@@ -7,23 +7,25 @@ Files
   sk620_flash.py        the same flasher for Linux (needs only python3)
 
 Updating a keyboard that already runs this QMK firmware
-  Windows: double-click sk620_flash.exe
-  Linux:   python3 sk620_flash.py
+  Windows: double-click sk620_flash.exe, then click "Flash firmware"
+  Linux:   python3 sk620_flash.py, then click "Flash firmware"
+           (no window? install Tk: sudo pacman -S --needed tk, or
+           sudo apt install python3-tk; or use: python3 sk620_flash.py --cli)
   The flasher restarts the keyboard into its bootloader, writes, verifies,
   and restarts it again. If it asks, press Fn+B on the keyboard.
 
 First flash over Cooler Master's stock firmware
   1. Open the case. Unplug the keyboard.
   2. Bridge the two SEL2 pads with tweezers and keep them there.
-  3. Plug the keyboard in and start the flasher as above.
+  3. Plug the keyboard in, start the flasher and click "Flash firmware".
   4. Type ERASE when asked: this permanently deletes Cooler Master's
      firmware (the chip is read-protected, so it can't be backed up).
   5. When it says Done, remove the tweezers.
 
 Linux permissions
-  Run with sudo once:  sudo python3 sk620_flash.py
-  or allow your user:  sudo python3 sk620_flash.py --install-udev
-  (then unplug and replug the keyboard)
+  The first time, the window offers to install a udev rule (asks for your
+  password). From a terminal: sudo python3 sk620_flash.py --install-udev
+  Then unplug and replug the keyboard.
 
 Windows SmartScreen may warn that sk620_flash.exe is from an unknown publisher.
 Choose "More info" > "Run anyway", or run sk620_flash.py with Python instead.

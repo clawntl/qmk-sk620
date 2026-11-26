@@ -58,11 +58,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Build sk620_flash.exe
+      - name: Test the flasher on Windows (loads the Windows HID backend)
+        run: |
+          python tools/flash/test_sk620_flash.py
+          python -c "import sys; sys.path.insert(0, 'tools/flash'); import sk620_flash as f; print('keyboard:', f.keyboard_state())"
+      - name: Build sk620_flash.exe (windowed GUI)
         run: |
           python -m pip install pyinstaller
-          pyinstaller --onefile --console --name sk620_flash tools/flash/sk620_flash.py
-          dist\sk620_flash.exe --help
+          pyinstaller --onefile --windowed --name sk620_flash tools/flash/sk620_flash.py
       - uses: actions/upload-artifact@v4
         with:
           name: windows-exe

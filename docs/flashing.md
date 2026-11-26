@@ -2,13 +2,18 @@
 
 ## The easy way: `sk620_flash`
 
-`tools/flash/sk620_flash.py` is a single-file flasher that runs on **Windows and Linux** using only Python's standard library. On Linux it uses the kernel's hidraw interface; on Windows it uses the HID API built into Windows. It needs no drivers, no libusb and no pip packages. Each [release](https://github.com/clawntl/qmk-sk620/releases) also includes it as a standalone `sk620_flash.exe` for Windows, together with the firmware. Release builds come from GitHub Actions.
+`tools/flash/sk620_flash.py` is a single-file flasher with a window and a command line that runs on **Windows and Linux** using only Python's standard library. On Linux it uses the kernel's hidraw interface; on Windows it uses the HID API built into Windows. It needs no drivers, no libusb and no pip packages. Each [release](https://github.com/clawntl/qmk-sk620/releases) also includes it as a standalone `sk620_flash.exe` for Windows, together with the firmware. Release builds come from GitHub Actions.
 
 | Situation | Windows | Linux |
 | --- | --- | --- |
-| Update (keyboard already runs this QMK) | double-click `sk620_flash.exe` | `python3 sk620_flash.py` |
-| Flash a specific file | `sk620_flash.exe firmware.bin` | `python3 sk620_flash.py firmware.bin` |
-| Show bootloader/protection info | `sk620_flash.exe --info` | `python3 sk620_flash.py --info` |
+| Open the flasher window | double-click `sk620_flash.exe` | `python3 sk620_flash.py` |
+| Flash from the command line | `python sk620_flash.py --cli` | `python3 sk620_flash.py --cli` |
+| Flash a specific file (command line) | `python sk620_flash.py firmware.bin` | `python3 sk620_flash.py firmware.bin` |
+| Show bootloader/protection info | "Check keyboard" button | `python3 sk620_flash.py --info` |
+
+The window shows whether the keyboard is connected and in which mode, lets you pick a different `.bin`, and shows progress and a log. It asks before any mass erase: first a confirmation, then you type `ERASE`.
+
+The window uses Tkinter, which comes with Python on Windows and inside `sk620_flash.exe`. Some Linux distros package it separately: on Arch/CachyOS run `sudo pacman -S --needed tk`, on Debian/Ubuntu `sudo apt install python3-tk`. Without it the tool says so and you can use `--cli`.
 
 The tool goes through these steps:
 
@@ -18,13 +23,13 @@ The tool goes through these steps:
 4. Writes in 52-byte blocks, then verifies every block.
 5. Restarts the keyboard.
 
-**First flash over stock firmware:** bridge the SEL2 pads, plug in, then run the tool. Keep SEL2 bridged until it says "Done".
+**First flash over stock firmware:** bridge the SEL2 pads, plug in, then click "Flash firmware". Keep SEL2 bridged until it says it's finished.
 
-**Linux permissions:** run it once with `sudo`, or install a udev rule so your user can flash without sudo: `sudo python3 sk620_flash.py --install-udev`.
+**Linux permissions:** the first time, the window offers to install a udev rule. It asks for your password through `pkexec`. From a terminal, run `sudo python3 sk620_flash.py --install-udev`. Either way, unplug and replug the keyboard afterwards.
 
 **Windows SmartScreen** may warn that the `.exe` comes from an unknown publisher. Choose "More info" and then "Run anyway", or run `sk620_flash.py` with Python instead.
 
-The flasher follows the same Holtek ISP protocol as hansemro's `ht32-dfu-tool`: the same commands, the same CRC16 and the same `O`/`F` status checks. Its tests run it against a simulated bootloader (`python3 tools/flash/test_sk620_flash.py`).
+The flasher follows the same Holtek ISP protocol as hansemro's `ht32-dfu-tool`: the same commands, the same CRC16 and the same `O`/`F` status checks. Its tests run it against a simulated bootloader (`python3 tools/flash/test_sk620_flash.py`). CI also runs them on Windows.
 
 ---
 

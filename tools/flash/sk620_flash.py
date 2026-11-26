@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """sk620_flash: flash QMK (or any firmware) onto a Cooler Master SK620.
 
-Single file, Python 3.8+ standard library only. Works on Linux (hidraw) and
+Single file, Python 3.8+ standard library only (the window uses Tkinter). Works on Linux (hidraw) and
 Windows (built-in HID API); no drivers, libusb or pip packages needed.
 
-    python3 sk620_flash.py                     # flash cm_sk620_default.bin next to this script
-    python3 sk620_flash.py firmware.bin        # flash a specific file
+    python3 sk620_flash.py                     # open the flasher window (falls back to the command line)
+    python3 sk620_flash.py --cli               # flash cm_sk620_default.bin next to this script, no window
+    python3 sk620_flash.py firmware.bin        # flash a specific file from the command line
     python3 sk620_flash.py --info              # show bootloader / protection info
     sudo python3 sk620_flash.py --install-udev # Linux: allow flashing without sudo
 
@@ -320,6 +321,10 @@ class Isp:
         self.version = version
         self.model = (info[0] | info[1] << 8) if version == 0x100 else int.from_bytes(info[16:20], 'little')
 
+    def describe(self):
+        model = f"HT32F{self.model:x}" if self.model else "HT32 (model not reported)"
+        return f"{model}, ISP v{self.version:x}, {self.flash_size} B flash, {self.page_size} B pages"
+
     def protection(self):
         self.dev.write(CMD_READ(OB_ADDR, 64))
         ob = self.dev.read(2.0)
@@ -354,6 +359,147 @@ class Isp:
         self.dev.close()
 
 
+def describe_protection(prot):
+    return (f"flash security {'ON' if prot['flash_security'] else 'off'}, "
+            f"option bytes {'locked' if prot['ob_protection'] else 'unlocked'}, "
+            f"page protection {' '.join(f'{p:08x}' for p in prot['page_protection'])}")
+
+
+def needs_mass_erase(prot, image_len, page_size):
+    pages = range(0, (image_len + page_size - 1) // page_size)
+    return prot['flash_security'] or any(not (prot['page_protection'][p // 32] >> (p % 32) & 1) for p in pages)
+
+
+def wait_for(fn, seconds, cancelled=lambda: False):
+    deadline = time.time() + seconds
+    while time.time() < deadline and not cancelled():
+        r = fn()
+        if r:
+            return r
+        time.sleep(0.3)
+    return None
+
+
+BOOTLOADER_HELP = ("Put the keyboard in bootloader mode:\n"
+                   "  - running QMK: press Fn+B (or hold Esc while plugging it in)\n"
+                   "  - stock firmware / first flash: bridge the SEL2 pads and plug it in")
+
+
+def keyboard_state():
+    """'bootloader', 'qmk' or None (cheap: only enumerates, opens nothing)."""
+    if find_hid(ISP_VID, ISP_PID):
+        return 'bootloader'
+    if find_hid(QMK_VID, QMK_PID, QMK_RAW_USAGE_PAGE):
+        return 'qmk'
+    return None
+
+
+def enter_bootloader(log, waiting, cancelled=lambda: False):
+    path = find_hid(ISP_VID, ISP_PID)
+    if path:
+        return path
+    qmk = find_hid(QMK_VID, QMK_PID, QMK_RAW_USAGE_PAGE)
+    if qmk:
+        log("Asking the keyboard to restart into its bootloader...")
+        d = HidDevice(qmk, 32)
+        try:
+            d.write(BOOT_MAGIC.ljust(32, b'\x00'))
+        except FlashError:
+            pass  # the keyboard may drop off USB before the write completes
+        d.close()
+        path = wait_for(lambda: find_hid(ISP_VID, ISP_PID), 10, cancelled)
+        if path:
+            return path
+        log("It didn't restart by itself.")
+    waiting()
+    return wait_for(lambda: find_hid(ISP_VID, ISP_PID), 120, cancelled)
+
+
+def read_info(log, waiting, cancelled=lambda: False):
+    path = enter_bootloader(log, waiting, cancelled)
+    if not path:
+        raise FlashError("no bootloader found (USB 04d9:8010)")
+    isp = Isp(path)
+    try:
+        prot = isp.protection()
+        log(f"Bootloader: {isp.describe()}")
+        log(f"Protection: {describe_protection(prot)}")
+        return isp, prot
+    except Exception:
+        isp.close()
+        raise
+
+
+def flash(image, log, progress, confirm_erase, waiting, cancelled=lambda: False):
+    """Put the keyboard in its bootloader, erase as needed, write, verify, restart."""
+    isp, prot = read_info(log, waiting, cancelled)
+    locked = needs_mass_erase(prot, len(image), isp.page_size)
+    try:
+        if locked:
+            if not confirm_erase():
+                raise FlashError("cancelled, nothing was changed")
+            log("Mass-erasing (about 5 seconds)...")
+            isp.dev.write(CMD_MASS_ERASE())
+            time.sleep(5)
+            isp.dev.write(CMD_RESET_ISP())  # reset so the cleared protection takes effect
+            isp.close()
+            isp = None
+            time.sleep(3)
+            path = wait_for(lambda: find_hid(ISP_VID, ISP_PID), 15)
+            if not path:
+                raise FlashError("the bootloader didn't come back after the erase: keep SEL2 bridged, "
+                                 "replug, and flash again")
+            isp = Isp(path)
+        else:
+            log("Erasing (about 5 seconds)...")
+            isp.dev.write(CMD_PAGE_ERASE(0, len(image)))
+            time.sleep(5)
+        log("Writing...")
+        isp.stream(image, 0, CMD_WRITE, "Writing", progress)
+        log("Verifying...")
+        isp.stream(image, 0, CMD_CHECK, "Verifying", progress)
+        log("Done. Restarting the keyboard.")
+        isp.dev.write(CMD_RESET_APP())
+        if locked:
+            log("Remove the tweezers from SEL2 if they're still there.")
+    finally:
+        if isp:
+            isp.close()
+
+
+def load_image(path):
+    with open(path, 'rb') as fh:
+        data = fh.read()
+    if not data or len(data) > FLASH_SIZE - 512:
+        raise FlashError(f"{os.path.basename(path)}: {len(data)} bytes doesn't fit the 127.5 KiB application flash")
+    sp, rst = struct.unpack_from('<II', data, 0)
+    if not (0x20000000 < sp <= 0x20004000 and rst & 1 and rst < len(data)):
+        raise FlashError(f"{os.path.basename(path)} doesn't start with a valid vector table (is it a .bin for address 0?)")
+    return data
+
+
+def udev_rules():
+    return ('# Cooler Master SK620: Holtek ROM ISP and QMK raw HID, for sk620_flash.py\n'
+            f'KERNEL=="hidraw*", ATTRS{{idVendor}}=="{ISP_VID:04x}", ATTRS{{idProduct}}=="{ISP_PID:04x}", MODE="0660", TAG+="uaccess"\n'
+            f'KERNEL=="hidraw*", ATTRS{{idVendor}}=="{QMK_VID:04x}", ATTRS{{idProduct}}=="{QMK_PID:04x}", MODE="0660", TAG+="uaccess"\n')
+
+
+def install_udev():
+    with open(UDEV_RULES, 'w') as f:
+        f.write(udev_rules())
+    os.system('udevadm control --reload && udevadm trigger')
+    print(f"Wrote {UDEV_RULES}. Unplug and replug the keyboard; then flash without sudo.")
+
+
+ERASE_WARNING = ("The chip is read-protected (stock firmware). Flashing needs a MASS ERASE, which permanently "
+                 "deletes Cooler Master's firmware and updater. Keep SEL2 bridged until flashing finishes.\n"
+                 "(docs/stock-firmware.md explains how to rebuild stock firmware from Cooler Master's updater.)")
+
+
+# --------------------------------------------------------------------------
+# Command line
+# --------------------------------------------------------------------------
+
 _last_pct = [None]
 
 
@@ -364,130 +510,296 @@ def progress_bar(done, total, what):
     _last_pct[0] = (what, pct)
     width = 40
     fill = done * width // total
-    sys.stdout.write(f"\r  {what:<9} [{'#' * fill}{'.' * (width - fill)}] {done * 100 // total:3d}%")
+    sys.stdout.write(f"\r  {what:<9} [{'#' * fill}{'.' * (width - fill)}] {pct:3d}%")
     if done >= total:
         sys.stdout.write("\n")
     sys.stdout.flush()
 
 
-def wait_for(fn, seconds, message=None):
-    if message:
-        print(message)
-    deadline = time.time() + seconds
-    while time.time() < deadline:
-        r = fn()
-        if r:
-            return r
-        time.sleep(0.3)
-    return None
+def run_cli(args):
+    if args.install_udev:
+        return install_udev()
+    say = lambda m: print(m)
+    waiting = lambda: print(BOOTLOADER_HELP + "\nWaiting up to 2 minutes...")
+    if args.info:
+        isp, _ = read_info(say, waiting)
+        isp.close()
+        return
+    image = load_image(args.firmware)
+    print(f"Firmware: {args.firmware} ({len(image)} bytes)")
+
+    def confirm():
+        print("\n" + ERASE_WARNING)
+        return args.yes or input("Type ERASE to continue: ").strip() == 'ERASE'
+
+    flash(image, say, progress_bar, confirm, waiting)
 
 
-def enter_bootloader():
-    path = find_hid(ISP_VID, ISP_PID)
-    if path:
-        return path
-    qmk = find_hid(QMK_VID, QMK_PID, QMK_RAW_USAGE_PAGE)
-    if qmk:
-        print("Found the SK620 running QMK; asking it to restart into the bootloader...")
-        d = HidDevice(qmk, 32)
+# --------------------------------------------------------------------------
+# GUI (Tkinter, part of the Python standard library)
+# --------------------------------------------------------------------------
+
+REPO_URL = 'https://github.com/clawntl/qmk-sk620'
+
+
+def run_gui(default_firmware):
+    import queue
+    import threading
+    import tkinter as tk
+    from tkinter import filedialog, messagebox, scrolledtext, simpledialog, ttk
+
+    root = tk.Tk()
+    root.title("SK620 QMK Flasher")
+    root.minsize(560, 460)
+    style = ttk.Style()
+    try:
+        style.theme_use('vista' if sys.platform == 'win32' else 'clam')
+    except tk.TclError:
+        pass
+    style.configure('SK.Horizontal.TProgressbar', background='#2b8a3e')
+
+    events = queue.Queue()          # worker -> UI
+    busy = threading.Event()
+    cancel = threading.Event()
+    fw_path = tk.StringVar(value=default_firmware if os.path.exists(default_firmware) else '')
+    fw_info = tk.StringVar()
+    kb_state = tk.StringVar(value="Looking for the keyboard...")
+    phase = tk.StringVar(value="")
+
+    pad = {'padx': 10, 'pady': 4}
+    from tkinter import font as tkfont
+    title_font = tkfont.nametofont('TkDefaultFont').copy()
+    title_font.configure(size=13, weight='bold')
+    tk.Label(root, text="Cooler Master SK620 QMK Flasher", font=title_font).pack(anchor='w', **pad)
+
+    box = ttk.LabelFrame(root, text="Firmware")
+    box.pack(fill='x', **pad)
+    row = ttk.Frame(box)
+    row.pack(fill='x', padx=6, pady=4)
+    ttk.Entry(row, textvariable=fw_path).pack(side='left', fill='x', expand=True)
+
+    def browse():
+        p = filedialog.askopenfilename(title="Choose firmware", filetypes=[("Firmware", "*.bin"), ("All files", "*")])
+        if p:
+            fw_path.set(p)
+    ttk.Button(row, text="Browse...", command=browse).pack(side='left', padx=(6, 0))
+    ttk.Label(box, textvariable=fw_info, foreground='#555').pack(anchor='w', padx=6, pady=(0, 4))
+
+    kb = ttk.LabelFrame(root, text="Keyboard")
+    kb.pack(fill='x', **pad)
+    dot = tk.Canvas(kb, width=14, height=14, highlightthickness=0)
+    dot.pack(side='left', padx=(8, 4), pady=8)
+    dot_id = dot.create_oval(2, 2, 12, 12, fill='#999', outline='')
+    ttk.Label(kb, textvariable=kb_state, wraplength=480, justify='left').pack(side='left', fill='x', pady=6)
+
+    btns = ttk.Frame(root)
+    btns.pack(fill='x', **pad)
+    flash_btn = ttk.Button(btns, text="Flash firmware")
+    info_btn = ttk.Button(btns, text="Check keyboard")
+    cancel_btn = ttk.Button(btns, text="Cancel", state='disabled')
+    flash_btn.pack(side='left')
+    info_btn.pack(side='left', padx=6)
+    cancel_btn.pack(side='left')
+
+    prog = ttk.Progressbar(root, maximum=100, style='SK.Horizontal.TProgressbar')
+    prog.pack(fill='x', **pad)
+    ttk.Label(root, textvariable=phase).pack(anchor='w', padx=10)
+
+    log_box = scrolledtext.ScrolledText(root, height=10, state='disabled', font='TkFixedFont')
+    log_box.pack(fill='both', expand=True, **pad)
+    help_lbl = ttk.Label(root, text="First flash over stock firmware: bridge the SEL2 pads, plug in, then Flash.   "
+                         "Help: " + REPO_URL, foreground='#555', wraplength=540)
+    help_lbl.pack(anchor='w', padx=10, pady=(0, 8))
+
+    def log(msg):
+        log_box.configure(state='normal')
+        log_box.insert('end', msg + "\n")
+        log_box.see('end')
+        log_box.configure(state='disabled')
+
+    def check_firmware(*_):
+        p = fw_path.get()
+        if not p:
+            fw_info.set("No firmware selected.")
+            return None
         try:
-            d.write(BOOT_MAGIC.ljust(32, b'\x00'))
-        except FlashError:
-            pass  # the keyboard may drop off USB before the write completes
-        d.close()
-        path = wait_for(lambda: find_hid(ISP_VID, ISP_PID), 10)
-        if path:
-            return path
-        print("It didn't restart by itself.")
-    return wait_for(lambda: find_hid(ISP_VID, ISP_PID), 120,
-                    "Put the keyboard in bootloader mode now:\n"
-                    "  - running QMK: press Fn+B (or hold Esc while plugging it in)\n"
-                    "  - stock firmware / first flash: bridge the SEL2 pads and plug it in\n"
-                    "Waiting up to 2 minutes...")
+            img = load_image(p)
+            fw_info.set(f"{os.path.basename(p)}: {len(img)} bytes, looks valid.")
+            return img
+        except (OSError, FlashError) as e:
+            fw_info.set(str(e))
+            return None
+    fw_path.trace_add('write', check_firmware)
+    check_firmware()
+
+    def set_state(state):
+        colours = {'bootloader': '#2b8a3e', 'qmk': '#1971c2', None: '#999'}
+        text = {'bootloader': "In bootloader mode, ready to flash.",
+                'qmk': "SK620 running QMK found. Flashing will restart it into the bootloader automatically.",
+                None: "Not found. Plug the keyboard in. For the first flash over stock firmware, "
+                      "bridge the SEL2 pads while plugging in."}[state]
+        dot.itemconfigure(dot_id, fill=colours[state])
+        kb_state.set(text)
+
+    def poll_keyboard():
+        if not busy.is_set():
+            try:
+                set_state(keyboard_state())
+            except Exception as e:
+                kb_state.set(f"Can't look for USB devices: {e}")
+        root.after(1500, poll_keyboard)
+
+    # --- worker plumbing -------------------------------------------------
+    def ui(kind, *a):
+        events.put((kind, a))
+
+    def ask(kind, *a):
+        """Ask the UI thread a question from the worker and wait for the answer."""
+        reply = queue.Queue()
+        events.put((kind, a + (reply,)))
+        return reply.get()
+
+    def worker(job, success_message=None):
+        try:
+            job()
+            ui('done', None, success_message)
+        except FlashError as e:
+            ui('done', str(e))
+        except Exception as e:  # unexpected: show it rather than vanish
+            ui('done', f"{type(e).__name__}: {e}")
+
+    def start(job, success_message=None):
+        busy.set()
+        cancel.clear()
+        prog['value'] = 0
+        for b in (flash_btn, info_btn):
+            b.configure(state='disabled')
+        cancel_btn.configure(state='normal')
+        threading.Thread(target=worker, args=(job, success_message), daemon=True).start()
+
+    def progress(done, total, what):
+        ui('progress', done * 100 // total, what)
+
+    def waiting():
+        ui('log', BOOTLOADER_HELP + "\nWaiting up to 2 minutes...")
+        ui('phase', "Waiting for bootloader mode...")
+
+    def do_flash():
+        img = check_firmware()
+        if img is None:
+            messagebox.showerror("SK620 Flasher", fw_info.get() or "Choose a firmware file first.")
+            return
+        log(f"Firmware: {fw_path.get()} ({len(img)} bytes)")
+        start(lambda: flash(img, lambda m: ui('log', m), progress, lambda: ask('confirm_erase'), waiting,
+                            cancel.is_set),
+              "Flashing finished. The keyboard is restarting with the new firmware.")
+
+    def do_info():
+        def job():
+            isp, _ = read_info(lambda m: ui('log', m), waiting, cancel.is_set)
+            isp.dev.write(CMD_RESET_APP())  # don't leave the keyboard stuck in the bootloader
+            isp.close()
+            ui('log', "Restarted the keyboard.")
+        start(job)
+
+    flash_btn.configure(command=do_flash)
+    info_btn.configure(command=do_info)
+    cancel_btn.configure(command=lambda: (cancel.set(), phase.set("Cancelling...")))
+
+    def offer_udev(err):
+        if not sys.platform.startswith('linux') or 'permission' not in err:
+            return False
+        if not messagebox.askyesno("SK620 Flasher",
+                                   "Linux needs permission to talk to the keyboard.\n\n"
+                                   f"Install a udev rule ({UDEV_RULES}) so your user can flash without sudo? "
+                                   "You'll be asked for your password."):
+            return True
+        import shutil
+        import subprocess
+        if not shutil.which('pkexec'):
+            messagebox.showinfo("SK620 Flasher", "Run this once in a terminal, then replug the keyboard:\n\n"
+                                f"sudo {sys.executable} {os.path.abspath(__file__)} --install-udev")
+            return True
+        r = subprocess.run(['pkexec', sys.executable, os.path.abspath(__file__), '--install-udev'])
+        if r.returncode == 0:
+            messagebox.showinfo("SK620 Flasher", "Done. Unplug and replug the keyboard, then try again.")
+        return True
+
+    def pump():
+        try:
+            while True:
+                kind, a = events.get_nowait()
+                if kind == 'log':
+                    log(a[0])
+                elif kind == 'phase':
+                    phase.set(a[0])
+                elif kind == 'progress':
+                    prog['value'] = a[0]
+                    phase.set(f"{a[1]}... {a[0]}%")
+                elif kind == 'confirm_erase':
+                    ok = messagebox.askokcancel("Erase stock firmware?", ERASE_WARNING, icon='warning')
+                    if ok:
+                        typed = simpledialog.askstring("Confirm", "Type ERASE to permanently erase the chip:",
+                                                       parent=root)
+                        ok = (typed or '').strip() == 'ERASE'
+                    a[0].put(ok)
+                elif kind == 'done':
+                    busy.clear()
+                    for b in (flash_btn, info_btn):
+                        b.configure(state='normal')
+                    cancel_btn.configure(state='disabled')
+                    err = a[0]
+                    if err:
+                        log("Error: " + err)
+                        phase.set("Failed.")
+                        if not offer_udev(err):
+                            messagebox.showerror("SK620 Flasher", err)
+                    else:
+                        phase.set("Finished.")
+                        if len(a) > 1 and a[1]:
+                            messagebox.showinfo("SK620 Flasher", a[1])
+        except queue.Empty:
+            pass
+        root.after(50, pump)
+
+    root.after(50, pump)
+    root.after(200, poll_keyboard)
+    root.mainloop()
 
 
-def load_image(path):
-    with open(path, 'rb') as fh:
-        data = fh.read()
-    if not data or len(data) > FLASH_SIZE - 512:
-        raise FlashError(f"{path}: {len(data)} bytes doesn't fit the 127.5 KiB application flash")
-    sp, rst = struct.unpack_from('<II', data, 0)
-    if not (0x20000000 < sp <= 0x20004000 and rst & 1 and rst < len(data)):
-        raise FlashError(f"{path} doesn't start with a valid vector table (is it a .bin for address 0?)")
-    return data
-
-
-def install_udev():
-    rules = ('# Cooler Master SK620: Holtek ROM ISP and QMK raw HID, for sk620_flash.py\n'
-             f'KERNEL=="hidraw*", ATTRS{{idVendor}}=="{ISP_VID:04x}", ATTRS{{idProduct}}=="{ISP_PID:04x}", MODE="0660", TAG+="uaccess"\n'
-             f'KERNEL=="hidraw*", ATTRS{{idVendor}}=="{QMK_VID:04x}", ATTRS{{idProduct}}=="{QMK_PID:04x}", MODE="0660", TAG+="uaccess"\n')
-    with open(UDEV_RULES, 'w') as f:
-        f.write(rules)
-    os.system('udevadm control --reload && udevadm trigger')
-    print(f"Wrote {UDEV_RULES}. Unplug and replug the keyboard; then flash without sudo.")
+def gui_available():
+    if sys.platform.startswith('linux') and not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
+        return False
+    try:
+        import tkinter  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 def main():
+    if sys.stdout is None:  # windowed .exe build: there is no console
+        sys.stdout = sys.stderr = open(os.devnull, 'w')
     here = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
-    ap = argparse.ArgumentParser(description="Flash firmware onto a Cooler Master SK620.")
-    ap.add_argument('firmware', nargs='?', default=os.path.join(here, 'cm_sk620_default.bin'))
+    default_fw = os.path.join(here, 'cm_sk620_default.bin')
+    ap = argparse.ArgumentParser(description="Flash firmware onto a Cooler Master SK620. "
+                                             "With no arguments on a desktop, opens a window.")
+    ap.add_argument('firmware', nargs='?', default=None)
+    ap.add_argument('--cli', action='store_true', help="use the command line even when a desktop is available")
+    ap.add_argument('--gui', action='store_true', help="open the window")
     ap.add_argument('--info', action='store_true', help="only show bootloader and protection info")
     ap.add_argument('--yes', action='store_true', help="don't ask before erasing stock firmware")
     ap.add_argument('--install-udev', action='store_true', help="Linux: install a udev rule (run with sudo)")
     args = ap.parse_args()
 
-    if args.install_udev:
-        return install_udev()
-    image = None if args.info else load_image(args.firmware)
-    if image:
-        print(f"Firmware: {args.firmware} ({len(image)} bytes)")
-
-    path = enter_bootloader()
-    if not path:
-        raise FlashError("no bootloader found (USB 04d9:8010)")
-    isp = Isp(path)
-    prot = isp.protection()
-    model = f"HT32F{isp.model:x}" if isp.model else "HT32 (model not reported)"
-    print(f"Bootloader: {model}, ISP v{isp.version:x}, {isp.flash_size} B flash, {isp.page_size} B pages")
-    print(f"Protection: flash security {'ON' if prot['flash_security'] else 'off'}, "
-          f"option bytes {'locked' if prot['ob_protection'] else 'unlocked'}, "
-          f"page protection {' '.join(f'{p:08x}' for p in prot['page_protection'])}")
-    if args.info:
-        isp.close()
-        return
-
-    pages = range(0, (len(image) + isp.page_size - 1) // isp.page_size)
-    locked = prot['flash_security'] or any(not (prot['page_protection'][p // 32] >> (p % 32) & 1) for p in pages)
-    if locked:
-        print("\nThe chip is read-protected (stock firmware). Flashing needs a MASS ERASE, which permanently\n"
-              "deletes Cooler Master's firmware and updater. Keep SEL2 bridged until flashing finishes.\n"
-              "(docs/stock-firmware.md explains how to rebuild stock firmware from Cooler Master's updater.)")
-        if not args.yes and input("Type ERASE to continue: ").strip() != 'ERASE':
-            isp.close()
-            raise FlashError("cancelled, nothing was changed")
-        print("Mass-erasing...")
-        isp.dev.write(CMD_MASS_ERASE())
-        time.sleep(5)
-        isp.dev.write(CMD_RESET_ISP())  # reset so the cleared protection takes effect
-        isp.close()
-        time.sleep(3)
-        path = wait_for(lambda: find_hid(ISP_VID, ISP_PID), 15)
-        if not path:
-            raise FlashError("the bootloader didn't come back after the erase: keep SEL2 bridged, "
-                             "replug, and run the tool again")
-        isp = Isp(path)
-    else:
-        print("Erasing...")
-        isp.dev.write(CMD_PAGE_ERASE(0, len(image)))
-        time.sleep(5)
-
-    isp.stream(image, 0, CMD_WRITE, "Writing", progress_bar)
-    isp.stream(image, 0, CMD_CHECK, "Verifying", progress_bar)
-    print("Done. Restarting the keyboard...")
-    isp.dev.write(CMD_RESET_APP())
-    isp.close()
-    if locked:
-        print("Remove the tweezers from SEL2 if they're still there.")
+    plain_start = not (args.firmware or args.cli or args.info or args.yes or args.install_udev)
+    if args.gui or (plain_start and gui_available()):
+        if not gui_available():
+            raise FlashError("no GUI available: install Tkinter (Arch/CachyOS: sudo pacman -S tk; "
+                             "Debian/Ubuntu: sudo apt install python3-tk), or use --cli")
+        return run_gui(args.firmware or default_fw)
+    args.firmware = args.firmware or default_fw
+    run_cli(args)
 
 
 if __name__ == '__main__':
@@ -499,6 +811,6 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         sys.exit(130)
     finally:
-        # Keep the console window open when the .exe was double-clicked.
+        # Keep the console window open when a console build of the .exe was double-clicked.
         if sys.platform == 'win32' and getattr(sys, 'frozen', False) and sys.stdin and sys.stdin.isatty():
             input("\nPress Enter to close...")

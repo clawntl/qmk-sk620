@@ -15,7 +15,7 @@ The pins were never probed by hand. They were read out of Cooler Master's own SK
 | Settings saved across unplugs (SPI flash) | Configured, not yet confirmed |
 | ANSI (US) SK620 | Matrix is the same; needs an ANSI layout and keymap |
 | SK622 (Bluetooth model) | Not supported |
-| One-step flasher, Windows and Linux, no dependencies | Tested against a simulated bootloader; first hardware run pending |
+| One-step flasher with GUI, Windows and Linux, no dependencies | Tested against a simulated bootloader; first hardware run pending |
 | Going back to stock firmware | Possible from Cooler Master's updater, untested (see [docs/stock-firmware.md](docs/stock-firmware.md)) |
 
 ## Hardware at a glance
@@ -34,8 +34,10 @@ The full pin map is in [docs/hardware.md](docs/hardware.md).
 
 Download the latest [release](https://github.com/clawntl/qmk-sk620/releases). It contains the firmware, `sk620_flash.exe` for Windows and `sk620_flash.py` for Linux; no drivers or other installs are needed.
 
-- **Windows:** double-click `sk620_flash.exe`.
-- **Linux:** run `python3 sk620_flash.py`. Use `sudo`, or run `sudo python3 sk620_flash.py --install-udev` once so you don't need it.
+- **Windows:** double-click `sk620_flash.exe` and click **Flash firmware**.
+- **Linux:** run `python3 sk620_flash.py` and click **Flash firmware**. It offers to set up USB permissions the first time. If no window appears, install Tk (`sudo pacman -S --needed tk`), or use `--cli`.
+
+![The SK620 flasher window after a first flash](docs/images/flasher.png)
 
 For the **first flash** over Cooler Master's firmware, open the case, bridge the **SEL2** pads with tweezers and plug in before starting the flasher. It will ask you to type `ERASE`. After that, updates need nothing but the flasher: it puts the keyboard into bootloader mode by itself.
 
@@ -67,7 +69,7 @@ docs/hardware.md           pin map, matrix, LED driver wiring, protection bits
 docs/flashing.md           setup and flashing on Linux, recovery
 docs/stock-firmware.md     Cooler Master updater format, extracting and restoring stock firmware
 docs/reverse-engineering.md how the pin map was read out of the stock firmware
-tools/flash/               sk620_flash.py: dependency-free flasher for Windows and Linux, plus its tests
+tools/flash/               sk620_flash.py: dependency-free flasher (window + command line) for Windows and Linux, plus its tests
 tools/cm_fw_extract.py     extract firmware images from a Cooler Master SK620 updater .exe
 tools/analysis/            Unicorn-based emulator and the scripts that produced the pin map
 tools/porting/             pin-finder firmware and log-to-QMK script for boards without stock firmware
