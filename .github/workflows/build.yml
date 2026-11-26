@@ -24,6 +24,8 @@ jobs:
         run: ./build.sh default
       - name: Build VIA keymap
         run: ./build.sh via
+      - name: Build LED mapper
+        run: ./build.sh ledmap
       - name: Check the VIA definition is up to date
         run: |
           python3 tools/via/gen_via_json.py
@@ -34,6 +36,7 @@ jobs:
           path: |
             out/cm_sk620_default.bin
             out/cm_sk620_via.bin
+            out/cm_sk620_ledmap.bin
 
   flasher-tests:
     runs-on: ubuntu-latest

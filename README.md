@@ -11,7 +11,7 @@ The pins were never probed by hand. They were read out of Cooler Master's own SK
 | All 65 keys (UK ISO) | Working, confirmed on hardware |
 | Fn layer from the keycap legends | Working |
 | Per-key RGB (MBIA043 driver) | Lights and animates, confirmed on hardware |
-| RGB effects that react to key presses | Not linked yet (LED-to-key mapping still to be done) |
+| RGB effects that react to key presses | Not linked yet: LED-to-key mapping firmware ready ([docs/led-mapping.md](docs/led-mapping.md)) |
 | Settings saved across unplugs (SPI flash) | Working, confirmed on hardware |
 | Change keys and lighting from the PC (VIA) | Built (`cm_sk620_via.bin`); not yet tried on hardware |
 | ANSI (US) SK620 | Matrix is the same; needs an ANSI layout and keymap |
@@ -83,11 +83,12 @@ Layer 0 is the stock UK layout, taken directly from Cooler Master's firmware. Th
 build.sh                   builds the firmware into out/ from the files below
 qmk_firmware/              official QMK, git submodule pinned to a tested commit (not modified)
 patches/qmk/               HT32 MCU and MBIA043 LED driver support, applied by build.sh
-qmk/keyboards/cm/sk620/    the SK620 keyboard definition and keymaps (default, via)
+qmk/keyboards/cm/sk620/    the SK620 keyboard definition and keymaps (default, via, ledmap)
 via/sk620_iso.json         VIA definition, to load in usevia.app
 docs/hardware.md           pin map, matrix, LED driver wiring, protection bits
 docs/flashing.md           flashing, building, recovery
 docs/configuring.md        changing keys and lighting from the PC with VIA
+docs/led-mapping.md        finding which LED is under which key (ledmap keymap)
 docs/stock-firmware.md     Cooler Master updater format, extracting and restoring stock firmware
 docs/reverse-engineering.md how the pin map was read out of the stock firmware
 tools/flash/               sk620_flash.py: dependency-free flasher (window + command line) for Windows and Linux, plus its tests
