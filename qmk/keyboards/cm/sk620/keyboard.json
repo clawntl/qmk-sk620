@@ -38,6 +38,7 @@
         "device_version": "1.0.0"
     },
     "features": {
+        "raw": true,
         "bootmagic": true,
         "extrakey": true,
         "mousekey": false,

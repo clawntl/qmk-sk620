@@ -13,13 +13,15 @@ Make example for this keyboard (after setting up your build environment):
 
     make cm/sk620:default
 
-Flashing example for this keyboard:
+Flashing example for this keyboard (or use `tools/flash/sk620_flash.py`, no dependencies, Windows and Linux):
 
     make cm/sk620:default:flash
 
 ## Bootloader
 
-Enter the bootloader in 3 ways:
+Enter the bootloader in 4 ways:
+
+* **Flasher**: `tools/flash/sk620_flash.py` sends a raw HID command that restarts the keyboard into the bootloader
 
 * **Bootmagic reset**: Hold down Esc and plug in the keyboard
 * **Keycode in layout**: Press Fn+B (`QK_BOOT`)

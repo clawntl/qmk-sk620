@@ -14,6 +14,32 @@ void keyboard_pre_init_kb(void) {
     keyboard_pre_init_user();
 }
 
+#ifdef RAW_ENABLE
+#    include <string.h>
+#    include "raw_hid.h"
+// tools/flash/sk620_flash.py sends this over QMK's raw HID interface to restart
+// the keyboard into the ROM bootloader, so flashing needs no Fn+B or tweezers.
+static const uint8_t sk620_boot_magic[] = {0x5B, 'S', 'K', '6', '2', '0', '-', 'B', 'O', 'O', 'T', 'L', 'O', 'A', 'D', 'E', 'R'};
+
+static bool sk620_handle_raw(uint8_t *data, uint8_t length) {
+    if (length >= sizeof(sk620_boot_magic) && memcmp(data, sk620_boot_magic, sizeof(sk620_boot_magic)) == 0) {
+        reset_keyboard();
+        return true;
+    }
+    return false;
+}
+
+#    ifdef VIA_ENABLE
+void raw_hid_receive_kb(uint8_t *data, uint8_t length) {
+    sk620_handle_raw(data, length);
+}
+#    else
+void raw_hid_receive(uint8_t *data, uint8_t length) {
+    sk620_handle_raw(data, length);
+}
+#    endif
+#endif
+
 #ifdef RGB_MATRIX_ENABLE
 #    include "mbi.h"
 

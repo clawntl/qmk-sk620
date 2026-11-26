@@ -61,7 +61,7 @@ kb = {
   "matrix_pins": {"rows": ["B7","B8","B11","D0","B13","B14","B15","C0","C13"],
                   "cols": ["A1","A2","A3","A4","A5","A6","A7","A8"]},
   "usb": {"vid": "0xFEED", "pid": "0x0620", "device_version": "1.0.0"},
-  "features": {"bootmagic": True, "extrakey": True, "mousekey": False, "nkro": True, "rgb_matrix": True, "command": False, "console": False},
+  "features": {"raw": True, "bootmagic": True, "extrakey": True, "mousekey": False, "nkro": True, "rgb_matrix": True, "command": False, "console": False},
   "bootmagic": {"matrix": [0, 0]},
   "eeprom": {"driver": "wear_leveling", "wear_leveling": {"driver": "spi_flash", "backing_size": 8192}},
   "rgb_matrix": {"driver": "mbi", "sleep": True, "max_brightness": 200,

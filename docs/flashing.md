@@ -1,8 +1,38 @@
-# Building and flashing
+# Flashing
 
-The steps below were tested on CachyOS (Arch-based) with the fish shell. Other Linux distros work the same way; only the package names change.
+## The easy way: `sk620_flash`
 
-## 1. Install the tools without touching system Python
+`tools/flash/sk620_flash.py` is a single-file flasher that runs on **Windows and Linux** using only Python's standard library. On Linux it uses the kernel's hidraw interface; on Windows it uses the HID API built into Windows. It needs no drivers, no libusb and no pip packages. Each [release](https://github.com/clawntl/qmk-sk620/releases) also includes it as a standalone `sk620_flash.exe` for Windows, together with the firmware. Release builds come from GitHub Actions.
+
+| Situation | Windows | Linux |
+| --- | --- | --- |
+| Update (keyboard already runs this QMK) | double-click `sk620_flash.exe` | `python3 sk620_flash.py` |
+| Flash a specific file | `sk620_flash.exe firmware.bin` | `python3 sk620_flash.py firmware.bin` |
+| Show bootloader/protection info | `sk620_flash.exe --info` | `python3 sk620_flash.py --info` |
+
+The tool goes through these steps:
+
+1. Finds the keyboard. If it's running this QMK firmware, the tool restarts it into the bootloader with a raw-HID command, so you don't need Fn+B.
+2. Reads the chip's protection settings.
+3. Erases only what's needed. A locked chip with stock firmware needs a mass erase, and the tool asks you to type `ERASE` first.
+4. Writes in 52-byte blocks, then verifies every block.
+5. Restarts the keyboard.
+
+**First flash over stock firmware:** bridge the SEL2 pads, plug in, then run the tool. Keep SEL2 bridged until it says "Done".
+
+**Linux permissions:** run it once with `sudo`, or install a udev rule so your user can flash without sudo: `sudo python3 sk620_flash.py --install-udev`.
+
+**Windows SmartScreen** may warn that the `.exe` comes from an unknown publisher. Choose "More info" and then "Run anyway", or run `sk620_flash.py` with Python instead.
+
+The flasher follows the same Holtek ISP protocol as hansemro's `ht32-dfu-tool`: the same commands, the same CRC16 and the same `O`/`F` status checks. Its tests run it against a simulated bootloader (`python3 tools/flash/test_sk620_flash.py`).
+
+---
+
+## Building the firmware yourself
+
+The rest of this page is only needed to build the firmware from source, or to flash with hansemro's `ht32-dfu-tool` instead.
+
+### 1. Install the tools without touching system Python
 
 These rules keep the install from interfering with your system:
 
@@ -50,7 +80,7 @@ sudo udevadm control --reload && sudo udevadm trigger
 > [!NOTE]
 > Version v103 of the SK620's ROM bootloader isn't decoded by `ht32-dfu-tool` yet, so it prints `Model: unknown`. To see the model, build the tool from source after running `sed -i 's/0x101 => {/0x101 | 0x102 | 0x103 => {/' src/device.rs`. Flashing works either way.
 
-## 2. First flash (erases the stock firmware)
+### 2. First flash with ht32-dfu-tool (erases the stock firmware)
 
 1. Open the case. Unplug the keyboard and put the PCB on a non-conductive surface.
 2. Bridge the two **SEL2** pads with tweezers and keep them bridged until step 5 finishes.
@@ -59,7 +89,7 @@ sudo udevadm control --reload && sudo udevadm trigger
 5. Run `ht32-dfu-tool -w write -m -v 0 cm_sk620_default.bin`. It mass-erases the chip, resets into the ROM bootloader (because SEL2 is still bridged), writes and verifies.
 6. Remove the tweezers, unplug, and plug back in. `lsusb` should show `feed:0620 Cooler Master SK620`.
 
-## 3. Later flashes
+### 3. Later flashes with ht32-dfu-tool
 
 Press **Fn+B**, or hold **Esc** while plugging in, then run:
 
