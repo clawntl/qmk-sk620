@@ -66,3 +66,9 @@
 #define MBI_NUM_LED_GPIO_PINS 8
 #define MBI_LED_GPIO_ACTIVE_STATE ACTIVE_HIGH
 #define MBI_LED_GPIO_OUTPUT_MODE (PAL_MODE_OUTPUT_PUSHPULL | PAL_MODE_HT32_AF(AFIO_GPIO))
+
+/* Firmware version for VIA (major << 16 | minor << 8 | patch), so apps like OpenPeriph can tell
+ * which release is installed. build.sh writes sk620_version.h from the repository's VERSION. */
+#if __has_include("sk620_version.h")
+#    include "sk620_version.h"
+#endif

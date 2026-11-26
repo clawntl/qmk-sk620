@@ -71,7 +71,7 @@ Layer 0 is the stock UK layout, taken directly from Cooler Master's firmware. Th
 | Fn + | Action | Fn + | Action |
 | --- | --- | --- | --- |
 | Esc | ` (with Shift: ¬) | J / K / L | Play-pause / previous / next track |
-| 1 … = | F1 … F12 | , / . / / | Volume down / up / mute |
+| 1 … = | F1 … F12 | , / . / / | Mute / volume down / volume up |
 | Backspace | Eject | Right Shift | Windows-key lock |
 | U / I / O | Print Screen / Scroll Lock / Pause | Tab | RGB on/off |
 | P | Insert | ↑ / ↓ | RGB brightness up / down |

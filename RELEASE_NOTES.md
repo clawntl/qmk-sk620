@@ -1,5 +1,7 @@
 QMK firmware for the Cooler Master SK620 (UK ISO), with a one-click flasher for Windows and Linux.
 
+**Changes in 1.0.1:** Fn + , / . / / are now mute / volume down / volume up, as printed on the keycaps. The firmware reports its version to VIA apps, so OpenPeriph can tell when an update is available and install it.
+
 **Download `sk620-qmk-v*.zip`**: it has everything below plus instructions (`FLASHING.txt`).
 
 | File | What |

@@ -86,6 +86,13 @@ fi
 rm -rf "$TREE/keyboards/cm/sk620"
 mkdir -p "$TREE/keyboards/cm"
 cp -r "$ROOT/qmk/keyboards/cm/sk620" "$TREE/keyboards/cm/sk620"
+# firmware version from VERSION (x.y.z), reported to VIA apps as major << 16 | minor << 8 | patch
+if [ -f "$ROOT/VERSION" ]; then
+    VERSION="$(tr -d ' \n\r' < "$ROOT/VERSION")"
+    IFS=. read -r vmaj vmin vpat <<< "$VERSION"
+    printf '#pragma once\n#define VIA_FIRMWARE_VERSION 0x%08X /* %s */\n' \
+        "$(( (vmaj << 16) | (vmin << 8) | vpat ))" "$VERSION" > "$TREE/keyboards/cm/sk620/sk620_version.h"
+fi
 
 # ---- 4. Python venv (local to this folder) -----------------------------------------------
 REQ_STAMP="$(sha256sum "$TREE/requirements.txt" | cut -d' ' -f1)+qmk-cli"
