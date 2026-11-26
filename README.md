@@ -15,7 +15,7 @@ The pins were never probed by hand. They were read out of Cooler Master's own SK
 | Settings saved across unplugs (SPI flash) | Configured, not yet confirmed |
 | ANSI (US) SK620 | Matrix is the same; needs an ANSI layout and keymap |
 | SK622 (Bluetooth model) | Not supported |
-| One-step flasher with GUI, Windows and Linux, no dependencies | Tested against a simulated bootloader; first hardware run pending |
+| One-step flasher with GUI, no dependencies | Working on Linux (CachyOS), including automatic bootloader entry; Windows build not yet tried on hardware |
 | Going back to stock firmware | Possible from Cooler Master's updater, untested (see [docs/stock-firmware.md](docs/stock-firmware.md)) |
 
 ## Hardware at a glance
