@@ -15,7 +15,7 @@
               "type": "dropdown",
               "options": [
                 ["All off", 0],
-                ["Solid color", 1],
+                ["Solid colour", 1],
                 ["Alphas mods", 2],
                 ["Breathing", 3],
                 ["Band val", 4],

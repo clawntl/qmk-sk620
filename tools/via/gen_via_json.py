@@ -35,7 +35,8 @@ def rgb_effects(enabled):
     out = [["All off", 0]]
     for n in names:
         if n in on:
-            out.append([n.replace("_", " ").capitalize(), len(out)])
+            # British spelling for the labels (VIA shows these as written)
+            out.append([n.replace("_", " ").capitalize().replace("color", "colour"), len(out)])
     return out
 
 
