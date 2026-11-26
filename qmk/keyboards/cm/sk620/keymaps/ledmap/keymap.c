@@ -2,10 +2,11 @@
 //
 // The firmware lights one LED at a time (bright white). You tap the key under it.
 //   tap the lit key           -> recorded, the next LED lights up; done keys turn dim green
-//   nothing lit? hold any key -> after 0.6 s that LED is recorded as "no LED", next one lights
+//   nothing lit? hold any key -> after 0.6 s that LED is recorded as "no LED"; the done keys
+//                                blink white to confirm, and the next LED lights
 //   two keys at once          -> undo: go back one step
-//   key flashes red           -> that key was already recorded for an earlier LED;
-//                                tap it again straight away if it really has a second LED
+//   key flashes red           -> that key was already recorded for an earlier LED (not recorded
+//                                again; on the SK620 every key has exactly one LED)
 // When every LED position has been done, all recorded keys turn blue (review mode).
 // Positions after the last real LED are usually empty, so expect to hold a few more times
 // with everything green and nothing white, until the keys turn blue. In review mode:
@@ -44,7 +45,8 @@ static keypos_t held;
 static uint16_t held_since;
 static uint16_t flash_since;
 static uint8_t  flash_led = NO_LED;
-static uint8_t  dup_code  = NO_KEY; // key that just flashed red; a second tap records it anyway
+static uint16_t skip_since;
+static bool     skip_blink;
 
 static uint8_t pos_code(keypos_t k) {
     return (uint8_t)((k.row << 4) | k.col);
@@ -74,25 +76,20 @@ static void advance(void) {
 }
 
 static void go_back(void) {
-    dup_code = NO_KEY;
-    review   = false;
+    review = false;
     if (step > 0) step--;
     assigned[step] = NO_KEY;
 }
 
 static void record_key(keypos_t k) {
     uint8_t code = pos_code(k);
-    if (code != dup_code) {
-        for (uint8_t i = 0; i < step; i++) {
-            if (assigned[i] == code) {
-                flash_led   = leds[i];
-                flash_since = timer_read();
-                dup_code    = code;
-                return;
-            }
+    for (uint8_t i = 0; i < step; i++) {
+        if (assigned[i] == code) {
+            flash_led   = leds[i];
+            flash_since = timer_read();
+            return;
         }
     }
-    dup_code       = NO_KEY;
     assigned[step] = code;
     advance();
 }
@@ -192,9 +189,10 @@ void housekeeping_task_user(void) {
     if (down_count != 1 || chord || consumed || timer_elapsed(held_since) < HOLD_MS) return;
     consumed = true;
     if (!review) {
-        dup_code       = NO_KEY;
         assigned[step] = NO_KEY; // "nothing lit here"
         advance();
+        skip_blink = true; // without this, skipping from one empty position to the next shows no change
+        skip_since = timer_read();
     } else if (keymap_key_to_keycode(0, held) == KC_ENT) {
         type_result();
     }
@@ -212,7 +210,9 @@ bool rgb_matrix_indicators_user(void) {
     rgb_matrix_set_color_all(0, 0, 0);
     for (uint8_t i = 0; i < step && i < n_leds; i++) {
         if (assigned[i] == NO_KEY) continue;
-        if (review) {
+        if (skip_blink && timer_elapsed(skip_since) < 200) {
+            rgb_matrix_set_color(leds[i], 60, 60, 60); // white blink: a hold-to-skip was taken
+        } else if (review) {
             rgb_matrix_set_color(leds[i], 0, 0, 60); // blue: finished
         } else {
             rgb_matrix_set_color(leds[i], 0, 40, 0); // green: recorded, still mapping

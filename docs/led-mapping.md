@@ -12,10 +12,10 @@ Before mapping, the LED driver table copied from the stock firmware has 108 LED 
 
 1. **Flash it.** In `sk620_flash`, click **Browse...**, choose `cm_sk620_ledmap.bin` and click **Flash firmware**. The keyboard restarts with all LEDs off except **one white LED**.
 2. **Tap the key under the white LED.** That key turns dim green and the next LED lights up white.
-3. **No white LED anywhere?** That position has no LED fitted, which happens about 40 times. **Hold any key for about a second** until the next white LED appears, then let go. If there's still nothing, hold again. One hold skips one position.
+3. **No white LED anywhere?** That position has no LED fitted, which happens about 40 times. **Hold any key for about a second** and let go once the green keys blink white: that blink confirms the skip. If there's still nothing lit, hold again. One hold skips one position. Let go too early and the hold counts as a tap on that key, so use a key you've already recorded (it just flashes red if released early) or watch for the blink.
 4. Repeat steps 2 and 3. Done keys stay dim green, so you can see your progress.
 5. **Made a mistake?** **Press any two keys at the same time** to go back one step. Do this again to go back further.
-6. **A key flashes red?** That key was already recorded for an earlier LED, so you probably meant a different key. If that key really has a second LED under it (the space bar might), tap it again straight away to record it anyway.
+6. **A key flashes red?** That key was already recorded for an earlier LED, so nothing was recorded. Every SK620 key has exactly one LED.
 7. **Keep going until the keys turn blue.** Once every key is green, there are usually a few empty positions left. Nothing is white, so keep holding any key for a second, one hold at a time, until **all the keys turn blue**: that means finished. A key that isn't blue was missed: go back with two keys and redo it. Press any key to make its LED turn white and check it.
 8. **Type the result.** With the keys blue, click into your text editor with the mouse, then **hold Enter for 1 second**. The keyboard types about 70 lines, starting with `sk620 ledmap 1` and ending with `end`. Don't touch the keyboard until it finishes (about 10 seconds).
 9. **Save or copy the text.** That's the result.
@@ -45,7 +45,7 @@ python3 tools/ledmap/apply_ledmap.py result.txt
 
 It rewrites `rgb_matrix.layout` in `keyboard.json` (each LED gets its key's matrix position and physical x/y) and the LED table in `sk620.c`, where positions with nothing fitted become `NLD`. The script expects the table to still use stock LED numbers, which is what the mapper steps through.
 
-The SK620 ISO result is in [`tools/ledmap/sk620_iso_ledmap.txt`](../tools/ledmap/sk620_iso_ledmap.txt) and has been applied. The board has 67 LEDs: one per key and three under the space bar.
+The SK620 ISO result is in [`tools/ledmap/sk620_iso_ledmap.txt`](../tools/ledmap/sk620_iso_ledmap.txt) and has been applied. The board has 65 LEDs, one per key. The first run recorded two empty positions as Space, because some hold-to-skip presses on Space were let go before 0.6 s. Both sit in the empty rows of the stock grid, so they were corrected by hand to dark. The mapper now blinks on every skip and no longer accepts a second LED for the same key.
 
 ## How it works
 

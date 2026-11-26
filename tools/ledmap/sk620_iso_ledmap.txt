@@ -1,11 +1,13 @@
 sk620 ledmap 1
+# Corrected by hand: 14 and 27 were recorded as Space because some of the 'hold to skip'
+# presses on Space were released before 0.6 s. Both sit in the stock grid's empty rows (0 and 6),
+# like every other dark position; the real space bar LED is 54 (grid column 7, bottom row).
 leds 108
 8 0,0
 9 1,0
 10 2,0
 11 3,0
 12 4,0
-14 7,2
 15 0,1
 18 7,0
 19 4,1
@@ -14,7 +16,6 @@ leds 108
 24 2,1
 25 3,1
 26 4,2
-27 7,2
 29 0,3
 30 1,2
 31 2,2
@@ -67,6 +68,6 @@ leds 108
 108 6,7
 109 8,6
 110 6,1
-dark 0 1 2 3 4 6 7 20 21 28 34 35 40 41 42 48 49 55 56 62 63 69 70 76 77 83 84 90 91 97 98 104 105 107 111 112 113 114 115 116 118
+dark 0 1 2 3 4 6 7 14 20 21 27 28 34 35 40 41 42 48 49 55 56 62 63 69 70 76 77 83 84 90 91 97 98 104 105 107 111 112 113 114 115 116 118
 missing
 end

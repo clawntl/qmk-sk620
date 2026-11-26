@@ -11,7 +11,7 @@ The pins were never probed by hand. They were read out of Cooler Master's own SK
 | All 65 keys (UK ISO) | Working, confirmed on hardware |
 | Fn layer from the keycap legends | Working |
 | Per-key RGB (MBIA043 driver) | Lights and animates, confirmed on hardware |
-| LED-to-key mapping (67 LEDs: one per key, three under the space bar) | Mapped on hardware ([docs/led-mapping.md](docs/led-mapping.md)) |
+| LED-to-key mapping (65 LEDs, one per key) | Mapped on hardware ([docs/led-mapping.md](docs/led-mapping.md)) |
 | RGB effects that react to key presses (splash, reactive, typing heatmap) | Built with the mapping; not yet tried on hardware |
 | Settings saved across unplugs (SPI flash) | Working, confirmed on hardware |
 | Change keys and lighting from the PC (VIA) | Built (`cm_sk620_via.bin`); not yet tried on hardware |

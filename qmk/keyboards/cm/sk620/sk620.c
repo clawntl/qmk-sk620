@@ -64,13 +64,13 @@ const mbi_channel_t g_mbi_channels[MBI_NUM_DRIVER][MBI_NUM_CHANNELS] = {
 // NLD = no LED fitted at that driver output.
 const uint8_t g_mbi_led_matrix_co[MBI_NUM_LED_GPIO_PINS][MBI_NUM_CHANNELS] = {
     {   0,  14,  28,  41,  56, NLD,  40, NLD, NLD, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
-    {   1,  15,  29,  43,  57,  65,  66,  54, NLD, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
-    {   2,  16,  30,  44,  58,  12,  26,  60, NLD, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
-    {   3,  17,  31,  45,   8,  22,  36,  50,  62, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
-    {   4,  18,  32,  46,   9,  23,  37,  51,  13, NLD, NLD, NLD, NLD, NLD,  59, NLD },
-    {   5,  19,  33,  47,  10,  24,  38,  52,  63, NLD, NLD, NLD,  61, NLD, NLD, NLD },
+    {   1,  15,  29,  43,  57,  63,  64,  54, NLD, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
+    {   2,  16,  30,  44,  58,  12,  26,  59, NLD, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
+    {   3,  17,  31,  45,   8,  22,  36,  50,  60, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
+    {   4,  18,  32,  46,   9,  23,  37,  51,  13, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
+    {   5,  19,  33,  47,  10,  24,  38,  52,  61, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
     {   6,  20,  34,  48,  11,  25,  39,  53,  55, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
-    {   7,  21,  35,  49,  42, NLD,  27, NLD,  64, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
+    {   7,  21,  35,  49,  42, NLD,  27, NLD,  62, NLD, NLD, NLD, NLD, NLD, NLD, NLD },
 };
 // clang-format on
 #endif
