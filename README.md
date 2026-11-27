@@ -107,7 +107,12 @@ tools/porting/             pin-finder firmware and log-to-QMK script for boards 
 
 ## Releases
 
-GitHub Actions builds everything on every push. To publish a release, change `VERSION` (and `RELEASE_NOTES.md`) on `main`: the Build workflow then tags `v<VERSION>` and uploads the zip, firmware, flasher and VIA definition. Pushing a `v*` tag yourself works too.
+GitHub Actions builds everything on every push and pull request. To publish a release:
+
+1. Update the changes paragraph in `RELEASE_NOTES.md` (it becomes the release text).
+2. On GitHub, open **Actions → Release → Run workflow**, pick **patch**, **minor** or **major**, and run it.
+
+That raises `VERSION`, commits it to `main`, builds the firmware and flasher and publishes `v<VERSION>` with the zip, firmware, flasher and VIA definition. OpenPeriph then offers the new firmware when the SK620 is plugged in. Changing `VERSION` on `main` yourself does the same.
 
 ## Credits
 

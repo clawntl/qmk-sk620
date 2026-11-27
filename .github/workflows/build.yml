@@ -1,20 +1,30 @@
 name: Build
 
-# Builds the QMK firmware and the Windows flasher on every push, and publishes a
-# ready-to-use release (firmware + flasher for Windows and Linux) for tags v*.
+# Builds the QMK firmware and the flasher on every push and pull request.
+#
+# Releasing: when main has a VERSION with no release yet, the same run publishes it (notes from
+# RELEASE_NOTES.md). The "Release" workflow (Actions tab -> Release -> Run workflow) raises
+# VERSION for you and then runs this.
 
 on:
   push:
-    branches: [main]
-    tags: ['v*']
+    branches: ['**']
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to build and release
+        type: string
+        required: true
 
 jobs:
   firmware:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - name: Install toolchain
         run: |
           sudo apt-get update
@@ -39,12 +49,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - run: python3 tools/flash/test_sk620_flash.py
 
   windows-exe:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -62,25 +76,23 @@ jobs:
           path: dist/sk620_flash.exe
 
   release:
-    # A release is published for a pushed v* tag, or when VERSION on main names a version that
-    # has no release yet (so a release needs only a commit that bumps VERSION).
-    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
+    # Published when VERSION names a version with no release yet: on main, or when the Release
+    # workflow calls this (so a release needs only a commit that raises VERSION).
+    if: inputs.ref != '' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')
     needs: [firmware, flasher-tests, windows-exe]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - name: Which version
         id: v
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            tag="$GITHUB_REF_NAME"
-          else
-            tag="v$(tr -d ' \n' < VERSION)"
-            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
-              echo "$tag already released"; tag=""
-            fi
+          tag="v$(tr -d ' \n\r' < VERSION)"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "$tag already released"; tag=""
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
@@ -100,7 +112,7 @@ jobs:
         if: steps.v.outputs.tag != ''
         with:
           tag_name: ${{ steps.v.outputs.tag }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ inputs.ref || github.sha }}
           name: SK620 QMK ${{ steps.v.outputs.tag }}
           body_path: RELEASE_NOTES.md
           files: |
