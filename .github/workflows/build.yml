@@ -2,9 +2,9 @@ name: Build
 
 # Builds the QMK firmware and the flasher on every push and pull request.
 #
-# Releasing: when main has a VERSION with no release yet, the same run publishes it (notes from
-# RELEASE_NOTES.md). The "Release" workflow (Actions tab -> Release -> Run workflow) raises
-# VERSION for you and then runs this.
+# Releasing: Actions tab -> Release -> Run workflow. That raises VERSION, commits it and runs this
+# with the new commit, which then publishes the release (text from RELEASE_NOTES.md). Ordinary
+# pushes never publish anything.
 
 on:
   push:
@@ -76,9 +76,8 @@ jobs:
           path: dist/sk620_flash.exe
 
   release:
-    # Published when VERSION names a version with no release yet: on main, or when the Release
-    # workflow calls this (so a release needs only a commit that raises VERSION).
-    if: inputs.ref != '' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')
+    # Only when the Release workflow calls this, and only for a VERSION with no release yet.
+    if: inputs.ref != ''
     needs: [firmware, flasher-tests, windows-exe]
     runs-on: ubuntu-latest
     permissions:

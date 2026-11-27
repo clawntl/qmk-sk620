@@ -15,15 +15,15 @@ Two apps can do it:
 
 The lock indicators (Caps Lock white, Windows-key lock red) aren't settings.
 
-Flashing a new firmware build resets the keymap and macros to the build's defaults. Save a backup first (OpenPeriph: Settings, Save to file; usevia.app: Save + Load).
+Flashing a new firmware build resets the keymap and macros to the build's defaults. Save a backup first (OpenPeriph: Device, Save to file; usevia.app: Save + Load).
 
 ## OpenPeriph
 
 1. Download it from its [releases](https://github.com/clawntl/openperiph/releases) and run it.
 2. **Linux:** if the SK620 shows **Needs access**, click **Allow access** (it adds a udev rule and asks for your password), then unplug and replug the keyboard. If you already let `sk620_flash` install its rule, this isn't needed.
-3. Pick **Cooler Master SK620** in the list. The **Keymap**, **Lighting**, **Macros** and **Settings** pages change the keyboard as you click.
+3. Click the **Cooler Master SK620** tab at the top (or its card on the Home page). The **Keymap**, **Lighting**, **Macros** and **Device** pages change the keyboard as you click.
 
-**Settings, Firmware** shows the installed version (firmware 1.0.1 and later report it), checks GitHub for a newer release, and updates in one click, keeping your keymap, macros and lighting. Only the very first flash over Cooler Master's firmware needs `sk620_flash`.
+When a newer firmware release is out, OpenPeriph asks whether to update. The **Device** page shows the installed version (firmware 1.0.1 and later report it) and has an **Update** button. Updating keeps your keymap, macros and lighting. Only the very first flash over Cooler Master's firmware needs `sk620_flash`.
 
 ## usevia.app
 

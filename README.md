@@ -112,7 +112,7 @@ GitHub Actions builds everything on every push and pull request. To publish a re
 1. Update the changes paragraph in `RELEASE_NOTES.md` (it becomes the release text).
 2. On GitHub, open **Actions → Release → Run workflow**, pick **patch**, **minor** or **major**, and run it.
 
-That raises `VERSION`, commits it to `main`, builds the firmware and flasher and publishes `v<VERSION>` with the zip, firmware, flasher and VIA definition. OpenPeriph then offers the new firmware when the SK620 is plugged in. Changing `VERSION` on `main` yourself does the same.
+That raises `VERSION`, commits it to `main`, builds the firmware and flasher and publishes `v<VERSION>` with the zip, firmware, flasher and VIA definition. OpenPeriph then offers the new firmware when the SK620 is plugged in. Ordinary pushes are only built; pick **none** to release the `VERSION` that's already there.
 
 ## Credits
 
